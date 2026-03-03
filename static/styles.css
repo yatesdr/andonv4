@@ -1,0 +1,318 @@
+/* === Reset & base === */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f0f1f5;
+  color: #2a2a2a;
+  min-height: 100vh;
+}
+
+/* === Top bar / nav === */
+.top-bar {
+  background: linear-gradient(90deg, #001B3D, #003A7A, #001B3D);
+  color: #fff;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  height: 64px;
+}
+.top-bar img { height: 48px; margin-right: 24px; }
+.nav-tabs { display: flex; align-items: stretch; height: 100%; }
+.nav-tab {
+  display: flex; align-items: center;
+  padding: 0 20px;
+  font-size: 14px; font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.nav-tab:hover { color: rgba(255,255,255,0.85); }
+.nav-tab.active { color: #fff; border-bottom-color: #4a90d9; }
+.nav-spacer { flex: 1; }
+.page-label { font-size: 20px; font-weight: 900; margin-right: 16px; }
+.nav-icon {
+  display: flex; align-items: center;
+  color: rgba(255,255,255,0.55);
+  transition: color 0.2s; padding: 4px;
+  text-decoration: none;
+}
+.nav-icon:hover { color: #fff; }
+.nav-icon svg { fill: currentColor; }
+
+/* === Simple bar (login, configure) === */
+.simple-bar {
+  background: linear-gradient(90deg, #001B3D, #003A7A, #001B3D);
+  color: #fff;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.simple-bar img { height: 48px; }
+.simple-bar h1 { font-size: 20px; font-weight: 900; }
+.simple-bar a {
+  color: #fff;
+  text-decoration: none;
+  margin-right: 16px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+.simple-bar a:hover { opacity: 1; }
+.simple-bar .spacer { flex: 1; }
+.logout-btn {
+  color: #fff;
+  font-size: 13px;
+  opacity: 0.8;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.logout-btn:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+
+/* === Buttons === */
+.btn {
+  padding: 8px 18px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #f7f8fa;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+}
+.btn:hover { background: #eee; }
+.btn-primary {
+  background: #4a90d9;
+  color: #fff;
+  border-color: #4a90d9;
+}
+.btn-primary:hover { background: #3a7bc8; }
+
+/* === Cards === */
+.card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.card h2 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+/* === Modals === */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 340px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+.modal h3 { margin: 0 0 16px; font-size: 16px; }
+.modal input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-buttons button {
+  padding: 8px 18px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #f7f8fa;
+  font-size: 14px;
+  cursor: pointer;
+}
+.modal-buttons button:hover { background: #eee; }
+.modal-buttons button.primary {
+  background: #4a90d9;
+  color: #fff;
+  border-color: #4a90d9;
+}
+.modal-buttons button.primary:hover { background: #3a7bc8; }
+
+/* === Form fields === */
+.field { margin-bottom: 16px; }
+.field label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #555;
+}
+.field input[type="text"], .field input[type="time"], .field input[type="password"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* === Messages === */
+.msg {
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: none;
+}
+.msg-ok { background: #e8f5e9; color: #2e7d32; }
+.msg-err { background: #fde; color: #c62828; }
+
+/* ================================ */
+/* Cell popover */
+#cell-popover {
+  display: none;
+  position: fixed;
+  z-index: 500;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  min-width: 260px;
+  max-width: 520px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #2a2a2a;
+}
+#cell-popover.open { display: block; }
+.popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f7f8fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+.popover-header h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+.popover-header .popover-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.popover-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #999;
+  padding: 0 4px;
+  line-height: 1;
+}
+.popover-close:hover { color: #333; }
+.popover-body {
+  padding: 12px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.popover-tag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+.popover-tag-row:last-child { border-bottom: none; }
+.popover-tag-label {
+  font-weight: 600;
+  color: #666;
+}
+.popover-tag-value {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  color: #333;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.popover-stub {
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Detail tables layout */
+.popover-tables {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
+.popover-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.popover-table td {
+  padding: 3px 6px;
+  border: 1px solid #ddd;
+  text-align: center;
+}
+.popover-section-header td {
+  background: #001B3D;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 4px 6px;
+}
+.popover-table .pv-label {
+  color: #777;
+  font-weight: 400;
+}
+.popover-table .pv-value {
+  font-weight: 700;
+  color: #1a1a1a;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+}
+.popover-bit-on {
+  background: #32cd32;
+  color: #1a1a1a;
+  font-weight: 700;
+  font-size: 10px;
+}
+.popover-bit-off {
+  background: #e0e0e0;
+  color: #999;
+  font-size: 10px;
+}
+.popover-no-data {
+  color: #999;
+  font-style: italic;
+  font-size: 12px;
+  padding: 8px 0;
+}

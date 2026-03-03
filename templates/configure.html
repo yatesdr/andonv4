@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configure - {{.Screen.Name}}</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .content {
+    max-width: 800px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+
+  .shape-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .shape-card h3 { font-size: 16px; margin-bottom: 4px; }
+  .type-badge {
+    display: inline-block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #fff;
+    background: #4a90d9;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-bottom: 12px;
+  }
+  .type-badge.press { background: #e67e22; }
+
+  .target-group {
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .target-group-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .target-group-remove:hover { color: #e53935; background: #fde; }
+
+  .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .form-group {
+    flex: 1;
+    min-width: 140px;
+  }
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: #4a90d9; outline: none; }
+
+  .style-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .style-row label {
+    font-weight: 600;
+    font-size: 13px;
+    color: #555;
+    white-space: nowrap;
+  }
+  .style-row select {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    min-width: 160px;
+  }
+  .style-row select:focus { border-color: #4a90d9; outline: none; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #4a90d9;
+    border-radius: 16px;
+    padding: 4px 10px 4px 12px;
+    font-size: 13px;
+    color: #fff;
+    font-weight: 500;
+  }
+  .chip-x {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .chip-x:hover { color: #fff; }
+
+  .add-targets-btn {
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #f7f8fa;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .add-targets-btn:hover { background: #eee; }
+
+  .save-bar {
+    text-align: right;
+    margin-top: 20px;
+  }
+  .save-bar button {
+    padding: 10px 24px;
+    border-radius: 6px;
+    border: none;
+    background: #4a90d9;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .save-bar button:hover { background: #3a7bc8; }
+  .save-bar .status {
+    display: inline-block;
+    margin-right: 12px;
+    font-size: 13px;
+    color: #999;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+  }
+  .no-styles-msg {
+    font-size: 12px;
+    color: #999;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+{{template "simple-bar" .}}
+
+<div class="content" id="form-container"></div>
+
+<script src="/static/utils.js"></script>
+<script>
+const screenID = '{{.Screen.ID}}';
+const shapes = {{.ShapesJSON}};
+const cellConfig = {{.CellConfigJSON}};
+const container = document.getElementById('form-container');
+
+// Per-shape styles come from the layout (defined in designer modal)
+// Each shape has .styles = [{name, value}, ...]
+function getShapeStyles(shapeId) {
+  const shape = shapes.find(s => s.id === shapeId);
+  return (shape && shape.styles) || [];
+}
+
+function styleNameByKey(shapeId, key) {
+  const st = getShapeStyles(shapeId).find(s => s.name === key);
+  return st ? st.name : key;
+}
+
+function fields(type) {
+  if (type === 'process') return [
+    { key: 'man_time', label: 'Man Time (s)' },
+    { key: 'machine_time', label: 'Machine Time (s)' },
+    { key: 'takt_time', label: 'Takt Time (s)' },
+  ];
+  return [
+    { key: 'jph', label: 'JPH (jobs/hour)' },
+    { key: 'target_die_change', label: 'Target Die Change (min)' },
+  ];
+}
+
+// Build initial target groups from saved data
+// Each group: { targets: {key: val}, styleNames: [name,...] }
+function initGroups(shape) {
+  const cfg = cellConfig[shape.id] || {};
+  const groups = [];
+  if (cfg.styles && Object.keys(cfg.styles).length > 0) {
+    const buckets = [];
+    for (const [sname, tp] of Object.entries(cfg.styles)) {
+      const key = JSON.stringify(tp);
+      let bucket = buckets.find(b => b.key === key);
+      if (!bucket) { bucket = { key, targets: tp, names: [] }; buckets.push(bucket); }
+      bucket.names.push(sname);
+    }
+    for (const b of buckets) groups.push({ targets: b.targets, styleNames: b.names });
+  } else {
+    const t = {};
+    for (const f of fields(shape.type)) { if (cfg[f.key]) t[f.key] = cfg[f.key]; }
+    groups.push({ targets: t, styleNames: [] });
+  }
+  return groups;
+}
+
+const shapeGroups = {};
+for (const s of shapes) shapeGroups[s.id] = initGroups(s);
+
+function renderGroup(shapeId, shapeType, group, idx, removable) {
+  const ff = fields(shapeType);
+  const available = getShapeStyles(shapeId);
+  let html = '<div class="target-group" data-shape-id="' + shapeId + '" data-group-idx="' + idx + '">';
+  if (removable) html += '<button type="button" class="target-group-remove" data-shape-id="' + shapeId + '" data-group-idx="' + idx + '">&times;</button>';
+
+  html += '<div class="form-row">';
+  for (const f of ff) {
+    const val = group.targets[f.key] || '';
+    html += '<div class="form-group"><label>' + f.label + '</label>';
+    html += '<input type="number" step="0.1" data-shape="' + shapeId + '" data-group="' + idx + '" data-field="' + f.key + '" value="' + val + '"></div>';
+  }
+  html += '</div>';
+
+  html += '<div class="style-row">';
+  html += '<label>Job Style:</label>';
+  if (available.length === 0) {
+    html += '<span class="no-styles-msg">Define styles in the designer first</span>';
+  } else {
+    // Unassigned styles for this shape (not used in any group)
+    const allAssigned = [];
+    for (const g of shapeGroups[shapeId]) allAssigned.push(...g.styleNames);
+    const unassigned = available.filter(s => !allAssigned.includes(s.name));
+
+    html += '<select class="style-select" data-shape-id="' + shapeId + '" data-group-idx="' + idx + '">';
+    html += '<option value="">Select...</option>';
+    for (const s of unassigned) {
+      html += '<option value="' + esc(s.name) + '">' + esc(s.name) + ' (' + s.value + ')</option>';
+    }
+    html += '</select>';
+  }
+  for (const name of group.styleNames) {
+    html += '<span class="chip">' + esc(name);
+    html += '<button type="button" class="chip-x" data-shape-id="' + shapeId + '" data-group-idx="' + idx + '" data-style-name="' + esc(name) + '">&times;</button></span>';
+  }
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderCard(shape) {
+  const groups = shapeGroups[shape.id];
+  const badgeClass = shape.type === 'press' ? ' press' : '';
+  let html = '<h3>' + esc(shape.label) + '</h3>';
+  html += '<span class="type-badge' + badgeClass + '">' + shape.type + '</span>';
+  html += '<div class="groups-container" data-shape-id="' + shape.id + '" data-shape-type="' + shape.type + '">';
+  for (let i = 0; i < groups.length; i++) {
+    html += renderGroup(shape.id, shape.type, groups[i], i, groups.length > 1);
+  }
+  html += '</div>';
+  html += '<button type="button" class="add-targets-btn" data-shape-id="' + shape.id + '">+ Add Targets</button>';
+  return html;
+}
+
+function refreshCard(shapeId) {
+  const shape = shapes.find(s => s.id === shapeId);
+  const card = document.querySelector('.shape-card[data-shape-id="' + shapeId + '"]');
+  card.innerHTML = renderCard(shape);
+}
+
+if (shapes.length === 0) {
+  container.innerHTML = '<div class="empty-state">No process or press shapes found in this screen\'s layout. Add some in the designer first.</div>';
+} else {
+  const form = document.createElement('form');
+  form.id = 'config-form';
+
+  for (const shape of shapes) {
+    const card = document.createElement('div');
+    card.className = 'shape-card';
+    card.dataset.shapeId = shape.id;
+    card.innerHTML = renderCard(shape);
+    form.appendChild(card);
+  }
+
+  const saveBar = document.createElement('div');
+  saveBar.className = 'save-bar';
+  saveBar.innerHTML = '<span class="status" id="save-status"></span><button type="submit">Save Configuration</button>';
+  form.appendChild(saveBar);
+  container.appendChild(form);
+
+  function syncGroupInputs(shapeId) {
+    const groups = shapeGroups[shapeId];
+    const shape = shapes.find(s => s.id === shapeId);
+    for (let i = 0; i < groups.length; i++) {
+      for (const f of fields(shape.type)) {
+        const input = document.querySelector('input[data-shape="' + shapeId + '"][data-group="' + i + '"][data-field="' + f.key + '"]');
+        if (input && input.value !== '') {
+          groups[i].targets[f.key] = f.key === 'jph' ? parseInt(input.value) : parseFloat(input.value);
+        } else if (input) {
+          delete groups[i].targets[f.key];
+        }
+      }
+    }
+  }
+
+  // Style select
+  form.addEventListener('change', e => {
+    const sel = e.target.closest('.style-select');
+    if (!sel || !sel.value) return;
+    const shapeId = sel.dataset.shapeId;
+    const gi = parseInt(sel.dataset.groupIdx);
+    const name = sel.value;
+    syncGroupInputs(shapeId);
+    shapeGroups[shapeId][gi].styleNames.push(name);
+    refreshCard(shapeId);
+  });
+
+  // Chip remove & group remove & add targets
+  form.addEventListener('click', e => {
+    const chipX = e.target.closest('.chip-x');
+    if (chipX) {
+      const shapeId = chipX.dataset.shapeId;
+      const gi = parseInt(chipX.dataset.groupIdx);
+      const name = chipX.dataset.styleName;
+      syncGroupInputs(shapeId);
+      shapeGroups[shapeId][gi].styleNames = shapeGroups[shapeId][gi].styleNames.filter(n => n !== name);
+      refreshCard(shapeId);
+      return;
+    }
+
+    const groupRm = e.target.closest('.target-group-remove');
+    if (groupRm) {
+      const shapeId = groupRm.dataset.shapeId;
+      const gi = parseInt(groupRm.dataset.groupIdx);
+      syncGroupInputs(shapeId);
+      shapeGroups[shapeId].splice(gi, 1);
+      refreshCard(shapeId);
+      return;
+    }
+
+    const addBtn = e.target.closest('.add-targets-btn');
+    if (addBtn) {
+      const shapeId = addBtn.dataset.shapeId;
+      syncGroupInputs(shapeId);
+      shapeGroups[shapeId].push({ targets: {}, styleNames: [] });
+      refreshCard(shapeId);
+      return;
+    }
+  });
+
+  // Save
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const status = document.getElementById('save-status');
+    status.textContent = 'Saving...';
+
+    const config = {};
+    for (const shape of shapes) {
+      syncGroupInputs(shape.id);
+      const groups = shapeGroups[shape.id];
+      const entry = {};
+
+      if (groups.length === 1 && groups[0].styleNames.length === 0) {
+        Object.assign(entry, groups[0].targets);
+      } else {
+        entry.styles = {};
+        for (const g of groups) {
+          if (g.styleNames.length === 0) {
+            Object.assign(entry, g.targets);
+          } else {
+            for (const name of g.styleNames) {
+              entry.styles[name] = Object.assign({}, g.targets);
+            }
+          }
+        }
+        if (Object.keys(entry.styles).length === 0) delete entry.styles;
+      }
+
+      if (Object.keys(entry).length > 0) config[shape.id] = entry;
+    }
+
+    try {
+      const resp = await fetch('/api/screens/' + screenID + '/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!resp.ok) throw new Error('Save failed');
+      window.location.href = '/';
+    } catch (err) {
+      status.textContent = 'Error: ' + err.message;
+    }
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Login</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .content {
+    max-width: 400px;
+    margin: 60px auto;
+    padding: 0 24px;
+  }
+  .card { padding: 32px; }
+  .card h2 {
+    font-size: 18px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
+  }
+  .error {
+    background: #fde;
+    color: #c62828;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .btn-primary {
+    width: 100%;
+    padding: 10px 18px;
+  }
+</style>
+</head>
+<body>
+
+{{template "simple-bar" .}}
+
+<div class="content">
+  <div class="card">
+    <h2>Sign In</h2>
+    {{if .Error}}
+    <div class="error">Invalid password.</div>
+    {{end}}
+    <form method="POST" action="/login">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <div class="field">
+        <label>Password</label>
+        <input type="password" name="password" autofocus required>
+      </div>
+      <button type="submit" class="btn-primary">Sign In</button>
+    </form>
+  </div>
+</div>
+
+</body>
+</html>

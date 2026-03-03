@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Designer</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .toolbar a {
+    padding: 8px 14px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #f7f8fa;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #333;
+  }
+  .toolbar a:hover { background: #eee; }
+  .toolbar input[type="text"] {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    width: 250px;
+  }
+  .toolbar button {
+    padding: 8px 18px;
+    border-radius: 4px;
+    border: 1px solid #4a90d9;
+    background: #4a90d9;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .toolbar button:hover { background: #3a7bc8; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .save-status {
+    font-size: 13px;
+    color: #999;
+  }
+  .warlink-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #999;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: #f7f8fa;
+    border: 1px solid #e0e0e0;
+  }
+  .warlink-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #bbb;
+    flex-shrink: 0;
+  }
+  .warlink-status.connecting .warlink-dot { background: #f0ad4e; }
+  .warlink-status.connected .warlink-dot { background: #5cb85c; }
+  .warlink-status.disconnected .warlink-dot { background: #d9534f; }
+
+  .editor-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* Left palette */
+  #palette {
+    width: 200px;
+    min-width: 200px;
+    background: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+    overflow-y: auto;
+  }
+  #palette h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin-bottom: 4px;
+  }
+  .palette-item {
+    background: #f7f8fa;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px 16px;
+    cursor: grab;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .palette-item:hover {
+    background: #eef2ff;
+    border-color: #4a90d9;
+  }
+  .palette-item:active { cursor: grabbing; }
+  .palette-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .palette-swatch.circle { border-radius: 50%; }
+  .palette-swatch img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  /* Canvas area */
+  #canvas-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 24px;
+  }
+  #canvas-wrap {
+    position: relative;
+    width: 960px;
+    height: 540px;
+    flex-shrink: 0;
+  }
+  canvas {
+    display: block;
+    width: 960px;
+    height: 540px;
+    border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  }
+  /* Modal */
+  #process-modal-overlay, #press-modal-overlay, #buffer-modal-overlay, #mbuf-modal-overlay, #final-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #process-modal-overlay.open, #press-modal-overlay.open, #buffer-modal-overlay.open, #mbuf-modal-overlay.open, #final-modal-overlay.open { display: flex; }
+  #process-modal, #press-modal, #buffer-modal, #mbuf-modal, #final-modal {
+    background: #fff;
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 340px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    font-size: 14px;
+  }
+  #press-modal {
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  #process-modal h3, #press-modal h3, #buffer-modal h3, #mbuf-modal h3, #final-modal h3 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    color: #222;
+  }
+  .modal-field {
+    margin-bottom: 14px;
+  }
+  .modal-field label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #555;
+  }
+  .filter-dropdown {
+    position: relative;
+  }
+  .filter-dropdown input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .filter-dropdown input:focus { border-color: #4a90d9; }
+  .filter-dropdown .dd-list {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 160px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    z-index: 110;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .filter-dropdown.open .dd-list { display: block; }
+  .filter-dropdown .dd-item {
+    padding: 8px 10px;
+    cursor: pointer;
+  }
+  .filter-dropdown .dd-item:hover,
+  .filter-dropdown .dd-item.active {
+    background: #eef2ff;
+    color: #1a6fd4;
+  }
+  .modal-buttons { margin-top: 18px; }
+
+  .chip-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+  .chip-container:empty::before {
+    content: 'No reporting units';
+    color: #999;
+    font-size: 12px;
+    font-style: italic;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #eef2ff;
+    border: 1px solid #c5d2f0;
+    border-radius: 12px;
+    padding: 2px 8px 2px 10px;
+    font-size: 12px;
+    color: #333;
+    white-space: nowrap;
+  }
+  .chip-rm {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .chip-rm:hover { color: #d9534f; }
+
+  #label-edit {
+    position: absolute;
+    display: none;
+    background: #fff;
+    border: 2px solid #4a90d9;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-weight: 900;
+    font-family: "Arial Black", "Impact", sans-serif;
+    text-align: center;
+    outline: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transform: translate(-50%, -50%);
+    z-index: 10;
+  }
+
+  /* Simulator panel */
+  #sim-panel {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    margin-top: 12px;
+    max-width: 960px;
+  }
+  .sim-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    padding: 10px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .sim-header label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .sim-header .sim-chevron {
+    margin-left: auto;
+    font-size: 16px;
+    color: #999;
+    transition: transform 0.2s;
+  }
+  .sim-header .sim-chevron.open { transform: rotate(90deg); }
+  .sim-shape-label { color: #999; font-weight: 400; margin-left: 8px; }
+  #sim-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease;
+  }
+  #sim-body.open {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  #sim-body-inner { padding: 0 16px 12px; }
+  .sim-no-selection { color: #bbb; font-size: 12px; font-style: italic; }
+  .sim-field-label {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 6px;
+    border-top: 1px solid #eee;
+    padding-top: 6px;
+  }
+  .sim-field-label:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+  .sim-bits {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 4px 12px;
+    margin-bottom: 10px;
+  }
+  .sim-bits label {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .sim-values {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .sim-values label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .sim-values input {
+    width: 120px;
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="/">&#8592; Back</a>
+  <input type="text" id="screen-name" placeholder="Screen name" value="{{.ScreenName}}">
+  <button id="save-btn">Save</button>
+  <div class="spacer"></div>
+  <span class="warlink-status" id="warlink-status"><span class="warlink-dot"></span><span class="warlink-label">No Warlink</span></span>
+  <span class="save-status" id="save-status"></span>
+</div>
+
+<div class="editor-body">
+<div id="palette">
+  <h2>Components</h2>
+  <div class="palette-item" draggable="true" data-type="process">
+    <canvas id="palette-process" width="80" height="60" style="width:40px;height:30px;border-radius:2px;flex-shrink:0;"></canvas>
+    Process
+  </div>
+  <div class="palette-item" draggable="true" data-type="press">
+    <canvas id="palette-press" width="60" height="60" style="width:30px;height:30px;border-radius:2px;flex-shrink:0;"></canvas>
+    Press
+  </div>
+  <div class="palette-item" draggable="true" data-type="buffer">
+    <canvas id="palette-buffer" width="40" height="40" style="width:20px;height:20px;border-radius:50%;flex-shrink:0;"></canvas>
+    Single Buffer
+  </div>
+  <div class="palette-item" draggable="true" data-type="multibuffer">
+    <canvas id="palette-multibuffer" width="50" height="30" style="width:25px;height:15px;border-radius:2px;flex-shrink:0;"></canvas>
+    Multi Buffer
+  </div>
+  <div class="palette-item" draggable="true" data-type="arrow">
+    <canvas id="palette-arrow" width="50" height="24" style="width:25px;height:12px;flex-shrink:0;"></canvas>
+    Flow Arrow
+  </div>
+  <div class="palette-item" draggable="true" data-type="header">
+    <canvas id="palette-header" width="80" height="20" style="width:40px;height:10px;border-radius:2px;flex-shrink:0;"></canvas>
+    Header
+  </div>
+  <div class="palette-item" draggable="true" data-type="image" data-src="/static/elements/mre.png">
+    <div class="palette-swatch"><img src="/static/elements/mre-small.png" alt="MRE"></div>
+    MRE Logo
+  </div>
+  <div class="palette-item" draggable="true" data-type="final">
+    <canvas id="palette-final" width="80" height="24" style="width:40px;height:12px;border-radius:2px;flex-shrink:0;"></canvas>
+    Final
+  </div>
+</div>
+
+<div id="canvas-area">
+  <div>
+    <div id="canvas-wrap">
+      <canvas id="canvas" width="1920" height="1080"></canvas>
+      <input id="label-edit" type="text">
+    </div>
+    <div style="text-align:center; color:#999; font-size:12px; margin-top:8px;">
+      Alt+Drag to clone &nbsp;&middot;&nbsp; Double-click label to edit &nbsp;&middot;&nbsp; Double-click process/press for properties &nbsp;&middot;&nbsp; Delete to remove
+    </div>
+    <div id="sim-panel">
+      <div class="sim-header" id="sim-header">
+        <label><input type="checkbox" id="sim-toggle"> Simulate PLC State</label>
+        <span class="sim-shape-label" id="sim-shape-label"></span>
+        <span class="sim-chevron" id="sim-chevron">&#9656;</span>
+      </div>
+      <div id="sim-body">
+        <div id="sim-body-inner">
+          <div class="sim-bits" id="sim-bits-grid"></div>
+          <div class="sim-values" id="sim-values-row"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="process-modal-overlay">
+  <div id="process-modal">
+    <h3>Process Properties</h3>
+    <div class="modal-field">
+      <label>Background Color</label>
+      <div class="bg-color-picker" data-modal="process" style="display:flex;gap:8px;margin-top:4px;">
+        <div class="bg-opt" data-color="#00FF00" title="Green" style="width:32px;height:32px;border-radius:4px;background:#00FF00;border:2px solid transparent;cursor:pointer;"></div>
+        <div class="bg-opt" data-color="#FF8C00" title="Orange" style="width:32px;height:32px;border-radius:4px;background:#FF8C00;border:2px solid transparent;cursor:pointer;"></div>
+        <div class="bg-opt" data-color="#AAAAAA" title="Inactive" style="width:32px;height:32px;border-radius:4px;background:#AAAAAA;border:2px solid transparent;cursor:pointer;"></div>
+        <div class="bg-opt" data-color="#9B59B6" title="Violet" style="width:32px;height:32px;border-radius:4px;background:#9B59B6;border:2px solid transparent;cursor:pointer;"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>PLC</label>
+      <div class="filter-dropdown" id="dd-proc-plc">
+        <input type="text" placeholder="Search PLC..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Production Count Tag</label>
+      <div class="filter-dropdown" id="dd-proc-count-tag">
+        <input type="text" placeholder="Search Count Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Buffer Tag</label>
+      <div class="filter-dropdown" id="dd-proc-buffer-tag">
+        <input type="text" placeholder="Search Buffer Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>State Tag</label>
+      <div class="filter-dropdown" id="dd-proc-state-tag">
+        <input type="text" placeholder="Search State Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Job Styles</label>
+      <div id="proc-modal-styles-list" style="max-height:200px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;padding:6px 8px;"></div>
+      <button type="button" id="proc-modal-add-style" style="margin-top:6px;padding:4px 12px;border:1px solid #ccc;border-radius:4px;background:#f7f8fa;font-size:12px;font-weight:600;cursor:pointer;">+ Add Style</button>
+    </div>
+    <div class="modal-field">
+      <label>Reporting Units</label>
+      <div class="chip-container" id="proc-modal-ru-chips"></div>
+      <div class="filter-dropdown" id="dd-proc-ru">
+        <input type="text" placeholder="Type to search or add..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button id="proc-modal-cancel">Cancel</button>
+      <button id="proc-modal-save" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="press-modal-overlay">
+  <div id="press-modal">
+    <h3>Press Properties</h3>
+    <div class="modal-field">
+      <label>Background Color</label>
+      <div class="bg-color-picker" data-modal="press" style="display:flex;gap:8px;margin-top:4px;">
+        <div class="bg-opt" data-color="#00FF00" title="Green" style="width:32px;height:32px;border-radius:4px;background:#00FF00;border:2px solid transparent;cursor:pointer;"></div>
+        <div class="bg-opt" data-color="#FF8C00" title="Orange" style="width:32px;height:32px;border-radius:4px;background:#FF8C00;border:2px solid transparent;cursor:pointer;"></div>
+        <div class="bg-opt" data-color="#AAAAAA" title="Inactive" style="width:32px;height:32px;border-radius:4px;background:#AAAAAA;border:2px solid transparent;cursor:pointer;"></div>
+        <div class="bg-opt" data-color="#9B59B6" title="Violet" style="width:32px;height:32px;border-radius:4px;background:#9B59B6;border:2px solid transparent;cursor:pointer;"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>PLC</label>
+      <div class="filter-dropdown" id="dd-press-plc">
+        <input type="text" placeholder="Search PLC..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Stroke Count Tag</label>
+      <div class="filter-dropdown" id="dd-press-count-tag">
+        <input type="text" placeholder="Search Count Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Job Count Tag</label>
+      <div class="filter-dropdown" id="dd-press-job-count-tag">
+        <input type="text" placeholder="Search Job Count Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>SPM Tag</label>
+      <div class="filter-dropdown" id="dd-press-spm-tag">
+        <input type="text" placeholder="Search SPM Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Coil Tag</label>
+      <div class="filter-dropdown" id="dd-press-coil-tag">
+        <input type="text" placeholder="Search Coil Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>State Tag</label>
+      <div class="filter-dropdown" id="dd-press-state-tag">
+        <input type="text" placeholder="Search State Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Style Tag</label>
+      <div class="filter-dropdown" id="dd-press-style-tag">
+        <input type="text" placeholder="Search Style Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>CAT IDs</label>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div class="filter-dropdown" id="dd-press-cat-id-1">
+          <input type="text" placeholder="CAT ID 1..." autocomplete="off">
+          <div class="dd-list"></div>
+        </div>
+        <div class="filter-dropdown" id="dd-press-cat-id-2">
+          <input type="text" placeholder="CAT ID 2..." autocomplete="off">
+          <div class="dd-list"></div>
+        </div>
+        <div class="filter-dropdown" id="dd-press-cat-id-3">
+          <input type="text" placeholder="CAT ID 3..." autocomplete="off">
+          <div class="dd-list"></div>
+        </div>
+        <div class="filter-dropdown" id="dd-press-cat-id-4">
+          <input type="text" placeholder="CAT ID 4..." autocomplete="off">
+          <div class="dd-list"></div>
+        </div>
+        <div class="filter-dropdown" id="dd-press-cat-id-5">
+          <input type="text" placeholder="CAT ID 5..." autocomplete="off">
+          <div class="dd-list"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Job Styles</label>
+      <div id="press-modal-styles-list" style="max-height:200px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:4px;padding:6px 8px;"></div>
+      <button type="button" id="press-modal-add-style" style="margin-top:6px;padding:4px 12px;border:1px solid #ccc;border-radius:4px;background:#f7f8fa;font-size:12px;font-weight:600;cursor:pointer;">+ Add Style</button>
+    </div>
+    <div class="modal-field">
+      <label>Reporting Units</label>
+      <div class="chip-container" id="press-modal-ru-chips"></div>
+      <div class="filter-dropdown" id="dd-press-ru">
+        <input type="text" placeholder="Type to search or add..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button id="press-modal-cancel">Cancel</button>
+      <button id="press-modal-save" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="buffer-modal-overlay">
+  <div id="buffer-modal">
+    <h3>Buffer Properties</h3>
+    <div class="modal-field">
+      <label>PLC</label>
+      <div class="filter-dropdown" id="dd-buf-plc">
+        <input type="text" placeholder="Search PLC..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Tag</label>
+      <div class="filter-dropdown" id="dd-buf-tag">
+        <input type="text" placeholder="Search Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button id="buffer-modal-cancel">Cancel</button>
+      <button id="buffer-modal-save" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="mbuf-modal-overlay">
+  <div id="mbuf-modal">
+    <h3>Multi Buffer Properties</h3>
+    <div class="modal-field">
+      <label>PLC</label>
+      <div class="filter-dropdown" id="dd-mbuf-plc">
+        <input type="text" placeholder="Search PLC..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Count Tag</label>
+      <div class="filter-dropdown" id="dd-mbuf-count-tag">
+        <input type="text" placeholder="Search Count Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button id="mbuf-modal-cancel">Cancel</button>
+      <button id="mbuf-modal-save" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="final-modal-overlay">
+  <div id="final-modal">
+    <h3>Final Properties</h3>
+    <div class="modal-field">
+      <label>PLC</label>
+      <div class="filter-dropdown" id="dd-final-plc">
+        <input type="text" placeholder="Search PLC..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Count Tag</label>
+      <div class="filter-dropdown" id="dd-final-count-tag">
+        <input type="text" placeholder="Search Count Tag..." autocomplete="off">
+        <div class="dd-list"></div>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button id="final-modal-cancel">Cancel</button>
+      <button id="final-modal-save" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { hydrateShapes, loadImage, startFlashTimer } from '/static/render.js';
+import { toggleSim, renderSimPanel } from '/static/simulator.js';
+import { drawPalettePreviews } from '/static/designer/palette.js';
+import { cssToCanvas, hitShape, hitChild, hitHandle, hitHeaderText, hitArrowHandle, hitLabelHandle, getLabelBounds } from '/static/designer/hittest.js';
+import { initShapes } from '/static/designer/shapes.js';
+import { initEditors } from '/static/designer/editors.js';
+import { initPropertyModals } from '/static/designer/property-modals.js';
+import { initInteractions } from '/static/designer/interactions.js';
+
+startFlashTimer();
+
+const canvas = document.getElementById('canvas');
+const state = {
+  shapes: [],
+  selectedId: null,
+  screenID: '{{.ScreenID}}',
+  ctx: canvas.getContext('2d'),
+  canvas: canvas,
+  SCALE: 2,
+};
+
+// Load existing layout
+const existingLayout = {{if .Layout}}{{.Layout}}{{else}}null{{end}};
+if (existingLayout && Array.isArray(existingLayout)) {
+  state.shapes = hydrateShapes(existingLayout.filter(s => s.type !== 'status'));
+}
+
+// Preload
+loadImage('/static/elements/mre.png');
+
+// Init modules
+const shapes = initShapes(state);
+const editors = initEditors(state, { getLabelBounds });
+const modals = initPropertyModals(state, { saveLayoutQuiet: shapes.saveLayoutQuiet, warlinkURL: '{{.WarlinkURL}}' });
+
+const { getSelected } = initInteractions(state, {
+  cssToCanvas, hitShape, hitChild, hitHandle, hitHeaderText, hitArrowHandle, hitLabelHandle, getLabelBounds,
+  createShape: shapes.createShape, cloneShape: shapes.cloneShape, saveScreen: shapes.saveScreen, saveLayoutQuiet: shapes.saveLayoutQuiet,
+  openHeaderTextEditor: editors.openHeaderTextEditor, openStatusTextEditor: editors.openStatusTextEditor, openLabelEditor: editors.openLabelEditor,
+  openProcessModal: modals.openProcessModal, openPressModal: modals.openPressModal, openBufferModal: modals.openBufferModal,
+  openMultiBufferModal: modals.openMultiBufferModal, openFinalModal: modals.openFinalModal,
+  isAnyModalOpen: modals.isAnyModalOpen, isEditing: editors.isEditing,
+});
+
+// Sim panel toggle
+document.getElementById('sim-toggle').addEventListener('change', () => {
+  toggleSim(getSelected);
+  renderSimPanel(getSelected);
+});
+document.getElementById('sim-header').addEventListener('click', (e) => {
+  if (e.target.id === 'sim-toggle') return;
+  document.getElementById('sim-body').classList.toggle('open');
+  document.getElementById('sim-chevron').classList.toggle('open');
+});
+
+// Startup
+drawPalettePreviews();
+renderSimPanel(getSelected);
+modals.fetchReportingUnits();
+modals.initWarlink();
+</script>
+</body>
+</html>

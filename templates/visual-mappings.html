@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Bit Mappings</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .content {
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 0 24px 100px;
+  }
+
+  /* Type tabs */
+  .type-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+  }
+  .type-tab {
+    padding: 10px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background: #f7f8fa;
+    color: #555;
+  }
+  .type-tab:first-child { border-radius: 6px 0 0 6px; }
+  .type-tab:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+  .type-tab.active {
+    background: #4a90d9;
+    color: #fff;
+    border-color: #4a90d9;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* Bit labels */
+  .bit-field-header {
+    font-size: 12px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 10px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #eee;
+  }
+  .bit-field-header:first-child { margin-top: 0; }
+  .bit-grid { display: flex; flex-direction: column; gap: 6px; }
+  .bit-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .bit-ref {
+    font-size: 13px;
+    font-weight: 600;
+    color: #777;
+    min-width: 70px;
+    font-family: monospace;
+  }
+  .bit-row input[type="text"] {
+    flex: 1;
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .bit-row input[type="text"]:focus { border-color: #4a90d9; outline: none; }
+
+  /* Remove buttons (x) */
+  .remove-btn {
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .remove-btn:hover { color: #e53935; background: #fde; }
+
+  /* Action card */
+  .action-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: #fafbfc;
+  }
+  .action-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .action-name {
+    font-size: 14px;
+    font-weight: 700;
+    font-family: monospace;
+    color: #333;
+  }
+
+  /* Rule rows */
+  .rule-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+    flex-wrap: wrap;
+  }
+  .rule-row:last-of-type { border-bottom: none; }
+  .rule-row select, .rule-row input[type="text"], .rule-row input[type="number"] {
+    padding: 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .rule-row select:focus, .rule-row input:focus { border-color: #4a90d9; outline: none; }
+  .rule-cond-type { width: 120px; }
+  .rule-bits-input { width: 240px; }
+  .rule-field-input { width: 120px; }
+  .rule-num-input { width: 70px; }
+  .color-picker-wrap { position: relative; display: inline-block; }
+  .color-swatch {
+    width: 36px; height: 30px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .color-swatch.null-val {
+    background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 50%/12px 12px;
+  }
+  .color-palette {
+    display: none;
+    position: absolute;
+    top: 34px; left: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 6px;
+    z-index: 200;
+    width: 176px;
+  }
+  .color-palette.open { display: grid; grid-template-columns: repeat(5, 28px); gap: 4px; }
+  .color-dot {
+    width: 28px; height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+  }
+  .color-dot:hover { border-color: #333; }
+  .color-dot.null-dot {
+    background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 50%/10px 10px;
+    font-size: 14px; display: flex; align-items: center; justify-content: center; color: #999;
+  }
+  .rule-color-text { width: 90px; }
+  .rule-check { width: 18px; height: 18px; }
+  .rule-value-text { width: 200px; }
+  .rule-text-select { width: 170px; }
+  .rule-label {
+    font-size: 11px;
+    color: #999;
+    font-weight: 600;
+  }
+
+  /* Reorder arrows */
+  .arrow-btn {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 5px;
+    color: #888;
+    line-height: 1;
+  }
+  .arrow-btn:hover { background: #eee; color: #333; }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #f7f8fa;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .btn:hover { background: #eee; }
+  .btn-primary {
+    background: #4a90d9;
+    color: #fff;
+    border-color: #4a90d9;
+  }
+  .btn-primary:hover { background: #3a7bc8; }
+  .btn-danger {
+    color: #e53935;
+    border-color: #e53935;
+  }
+  .btn-danger:hover { background: #fde; }
+  .btn-sm {
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  /* Save bar */
+  .save-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #ddd;
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 100;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+  }
+  .save-status {
+    font-size: 13px;
+    color: #999;
+    min-width: 100px;
+    text-align: right;
+  }
+  .save-status.ok { color: #2e7d32; }
+  .save-status.err { color: #c62828; }
+
+  .bit-hint {
+    font-size: 10px;
+    color: #aaa;
+    font-style: italic;
+    margin-left: 2px;
+  }
+  .io-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .help-text {
+    font-size: 13px;
+    color: #777;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+{{template "nav-bar" .}}
+
+<div class="content">
+  <div class="type-tabs">
+    <div class="type-tab active" data-type="process">Process</div>
+    <div class="type-tab" data-type="press">Press</div>
+  </div>
+  <div id="tab-content"></div>
+</div>
+
+<div class="save-bar">
+  <span class="save-status" id="save-status"></span>
+  <button class="btn btn-primary" id="save-btn">Save</button>
+  <button class="btn btn-danger" id="reset-btn">Reset to Defaults</button>
+</div>
+
+<script src="/static/utils.js"></script>
+<script type="module">
+import { DEFAULT_MAPPINGS } from '/static/render.js';
+
+let mappings = null;
+let activeTab = 'process';
+
+// Preset palette colors for the custom color picker
+const PALETTE_COLORS = [
+  '#c0c0c0', '#ffffff', '#000000', '#f44336', '#ff0000',
+  '#ff9800', '#ff6a00', '#ffeb3b', '#4caf50', '#00ff00',
+  '#2196f3', '#00d4ff', '#9c27b0', '#8b00ff', null,
+];
+const PALETTE_HTML = PALETTE_COLORS.map(c =>
+  c === null
+    ? '<div class="color-dot null-dot" data-color="null">&oslash;</div>'
+    : '<div class="color-dot" style="background-color:' + c + '" data-color="' + c + '"></div>'
+).join('');
+
+// Deep clone utility
+function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+// Load mappings from server, fall back to defaults
+async function loadMappings() {
+  try {
+    const resp = await fetch('/api/visual-mappings');
+    const data = await resp.json();
+    if (data && data.process) {
+      mappings = clone(data);
+    } else {
+      mappings = clone(DEFAULT_MAPPINGS);
+    }
+  } catch {
+    mappings = clone(DEFAULT_MAPPINGS);
+  }
+  renderTab();
+}
+
+// Determine if action expects a color value
+function isColorAction(action) {
+  return action === 'backgroundColor' || action === 'glow' || action === 'chip' ||
+    action.endsWith('Color') || action.endsWith('.backgroundColor') || action.endsWith('.borderColor');
+}
+
+// Determine if action expects a boolean value
+function isBoolAction(action) {
+  return action === 'flashing' || action.endsWith('.visible');
+}
+
+// Determine if action is a text/data-source action
+function isTextAction(action) {
+  return action === 'text';
+}
+
+// Text action dropdown options: label → internal value
+const TEXT_OPTIONS = [
+  { key: 'dash',      label: 'Dash (-)' },
+  { key: 'high16',    label: 'Copy Field: High Word' },
+  { key: 'low16',     label: 'Copy Field: Low Word' },
+  { key: 'full',      label: 'Copy Field: Full DINT' },
+  { key: 'custom',    label: 'Custom...' },
+];
+
+function textValueToKey(value) {
+  if (value === '-') return 'dash';
+  if (value && typeof value === 'object' && (value.copy_from || value.source)) {
+    const dec = value.decode || '';
+    if (dec === 'high16') return 'high16';
+    if (dec === 'low16') return 'low16';
+    if (!dec) return 'full';
+  }
+  return 'custom';
+}
+
+function textValueField(value) {
+  if (value && typeof value === 'object') return value.copy_from || value.source || 'count';
+  return 'count';
+}
+
+// Get the current type mapping
+function getTypeMapping() { return mappings[activeTab]; }
+
+// Build bit label lookup
+function bitLabelMap() {
+  return getTypeMapping().bit_labels || {};
+}
+
+// Render bit hint for a ref
+function bitHint(ref) {
+  const labels = bitLabelMap();
+  return labels[ref] ? ' <span class="bit-hint">(' + esc(labels[ref]) + ')</span>' : '';
+}
+
+function renderBitLabels() {
+  const tm = getTypeMapping();
+  if (!tm.bit_labels) tm.bit_labels = {};
+
+  // Group by field prefix, sorted by bit number within each group
+  const groups = {};
+  for (const [ref, label] of Object.entries(tm.bit_labels)) {
+    const dot = ref.indexOf('.');
+    if (dot < 0) continue;
+    const field = ref.substring(0, dot);
+    const bit = parseInt(ref.substring(dot + 1), 10);
+    if (!groups[field]) groups[field] = [];
+    groups[field].push({ ref, label, bit });
+  }
+  for (const arr of Object.values(groups)) arr.sort((a, b) => a.bit - b.bit);
+
+  // Render fields in stable order: state first, then computedState, then any others
+  const fieldOrder = ['state', 'computedState'];
+  const allFields = Object.keys(groups);
+  for (const f of allFields) {
+    if (!fieldOrder.includes(f)) fieldOrder.push(f);
+  }
+
+  let html = '<div class="card"><h2>Bit Labels</h2>';
+  for (const field of fieldOrder) {
+    const entries = groups[field];
+    if (!entries || !entries.length) continue;
+    html += '<div class="bit-field-header">' + esc(field) + '</div>';
+    html += '<div class="bit-grid">';
+    for (const { ref, label } of entries) {
+      html += '<div class="bit-row" data-ref="' + esc(ref) + '">';
+      html += '<span class="bit-ref">' + esc(ref) + '</span>';
+      html += '<input type="text" value="' + esc(label) + '" data-action="bit-label" data-ref="' + esc(ref) + '">';
+      html += '<button class="remove-btn" data-action="remove-bit" data-ref="' + esc(ref) + '" title="Remove">&times;</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<button class="btn btn-sm" data-action="add-bit" data-field="' + esc(field) + '" style="margin-top:6px;margin-bottom:12px">+ Add ' + esc(field) + ' Bit</button>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderConditionInputs(condition, actionKey, ruleIdx) {
+  const prefix = 'data-action-key="' + esc(actionKey) + '" data-rule-idx="' + ruleIdx + '"';
+  let html = '<select class="rule-cond-type" data-action="cond-type" ' + prefix + '>';
+  const types = ['default', 'bits_any', 'bits_all', 'range', 'has_field'];
+  const typeLabels = { default: 'default', bits_any: 'bits (any)', bits_all: 'bits (all)', range: 'range', has_field: 'has_field' };
+
+  let currentType = 'default';
+  if (condition.type === 'bits') {
+    currentType = condition.all ? 'bits_all' : 'bits_any';
+  } else if (condition.type === 'range') {
+    currentType = 'range';
+  } else if (condition.type === 'has_field') {
+    currentType = 'has_field';
+  }
+
+  for (const t of types) {
+    html += '<option value="' + t + '"' + (currentType === t ? ' selected' : '') + '>' + typeLabels[t] + '</option>';
+  }
+  html += '</select>';
+
+  if (currentType === 'bits_any' || currentType === 'bits_all') {
+    const refs = (condition.any || condition.all || []).join(', ');
+    html += '<input type="text" class="rule-bits-input" placeholder="state.1, state.3" value="' + esc(refs) + '" data-action="cond-bits" ' + prefix + '>';
+    // Show hints
+    const labels = bitLabelMap();
+    const bitRefs = (condition.any || condition.all || []);
+    const hints = bitRefs.map(r => labels[r.trim()]).filter(Boolean);
+    if (hints.length) {
+      html += '<span class="bit-hint">(' + esc(hints.join(', ')) + ')</span>';
+    }
+  } else if (currentType === 'range') {
+    html += '<input type="text" class="rule-field-input" placeholder="field" value="' + esc(condition.field || '') + '" data-action="cond-range-field" ' + prefix + '>';
+    html += '<span class="rule-label">min</span>';
+    html += '<input type="number" step="any" class="rule-num-input" value="' + (condition.min != null ? condition.min : '') + '" data-action="cond-range-min" ' + prefix + '>';
+    html += '<span class="rule-label">max</span>';
+    html += '<input type="number" step="any" class="rule-num-input" value="' + (condition.max != null ? condition.max : '') + '" data-action="cond-range-max" ' + prefix + '>';
+  } else if (currentType === 'has_field') {
+    html += '<input type="text" class="rule-field-input" placeholder="field name" value="' + esc(condition.field || '') + '" data-action="cond-hasfield" ' + prefix + '>';
+  }
+
+  return html;
+}
+
+function renderValueInput(value, actionKey, ruleIdx) {
+  const prefix = 'data-action-key="' + esc(actionKey) + '" data-rule-idx="' + ruleIdx + '"';
+
+  if (isColorAction(actionKey)) {
+    const isNull = value === null || value === undefined;
+    const isHex = typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
+    const textVal = isNull ? 'null' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
+    const swatchStyle = isHex ? 'background-color:' + value : (isNull ? '' : 'background-color:' + value);
+    const nullClass = isNull ? ' null-val' : '';
+    return '<div class="color-picker-wrap">' +
+      '<div class="color-swatch' + nullClass + '" style="' + esc(swatchStyle) + '" data-action="color-swatch" ' + prefix + '></div>' +
+      '<div class="color-palette" data-action="color-palette" ' + prefix + '>' + PALETTE_HTML + '</div>' +
+      '</div>' +
+      '<input type="text" class="rule-color-text" value="' + esc(textVal) + '" data-action="value-color-text" ' + prefix + '>';
+  }
+
+  if (isBoolAction(actionKey)) {
+    const checked = value === true ? ' checked' : '';
+    return '<input type="checkbox" class="rule-check" data-action="value-bool" ' + prefix + checked + '>';
+  }
+
+  if (isTextAction(actionKey)) {
+    const selectedKey = textValueToKey(value);
+    let html = '<select class="rule-text-select" data-action="value-text-select" ' + prefix + '>';
+    for (const opt of TEXT_OPTIONS) {
+      html += '<option value="' + opt.key + '"' + (selectedKey === opt.key ? ' selected' : '') + '>' + esc(opt.label) + '</option>';
+    }
+    html += '</select>';
+    if (selectedKey === 'high16' || selectedKey === 'low16' || selectedKey === 'full') {
+      const field = textValueField(value);
+      html += '<input type="text" class="rule-field-input" placeholder="field name" value="' + esc(field) + '" data-action="value-text-field" ' + prefix + '>';
+    } else if (selectedKey === 'custom') {
+      const raw = value === null ? 'null' : (typeof value === 'object' ? JSON.stringify(value) : String(value));
+      html += '<input type="text" class="rule-value-text" value="' + esc(raw) + '" data-action="value-text" ' + prefix + '>';
+    }
+    return html;
+  }
+
+  // Generic: show text input with JSON or raw value
+  let textVal;
+  if (value === null || value === undefined) {
+    textVal = 'null';
+  } else if (typeof value === 'object') {
+    textVal = JSON.stringify(value);
+  } else {
+    textVal = String(value);
+  }
+  return '<input type="text" class="rule-value-text" value="' + esc(textVal) + '" data-action="value-text" ' + prefix + '>';
+}
+
+function renderRuleRow(rule, actionKey, ruleIdx, totalRules) {
+  const prefix = 'data-action-key="' + esc(actionKey) + '" data-rule-idx="' + ruleIdx + '"';
+  let html = '<div class="rule-row">';
+
+  // Reorder
+  html += '<button class="arrow-btn" data-action="move-up" ' + prefix + '' + (ruleIdx === 0 ? ' disabled' : '') + '>&uarr;</button>';
+  html += '<button class="arrow-btn" data-action="move-down" ' + prefix + '' + (ruleIdx === totalRules - 1 ? ' disabled' : '') + '>&darr;</button>';
+
+  // Condition
+  html += renderConditionInputs(rule.condition, actionKey, ruleIdx);
+
+  // Arrow
+  html += '<span class="rule-label">&rarr;</span>';
+
+  // Value
+  html += renderValueInput(rule.value, actionKey, ruleIdx);
+
+  // Remove
+  html += '<button class="remove-btn" data-action="remove-rule" ' + prefix + ' title="Remove rule">&times;</button>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderActionCard(actionKey, rules) {
+  let html = '<div class="action-card" data-action-key="' + esc(actionKey) + '">';
+  html += '<div class="action-header">';
+  html += '<span class="action-name">' + esc(actionKey) + '</span>';
+  html += '<button class="remove-btn" data-action="remove-action" data-action-key="' + esc(actionKey) + '" title="Remove action">&times;</button>';
+  html += '</div>';
+
+  for (let i = 0; i < rules.length; i++) {
+    html += renderRuleRow(rules[i], actionKey, i, rules.length);
+  }
+
+  html += '<button class="btn btn-sm" data-action="add-rule" data-action-key="' + esc(actionKey) + '" style="margin-top:8px">+ Add Rule</button>';
+  html += '</div>';
+  return html;
+}
+
+// Bind text-field listeners for color inputs (swatch/palette handled via click delegation)
+function bindColorInputs() {
+  for (const textEl of content.querySelectorAll('input[data-action="value-color-text"]')) {
+    const actionKey = textEl.dataset.actionKey;
+    const ruleIdx = parseInt(textEl.dataset.ruleIdx);
+    textEl.addEventListener('input', () => {
+      // Update swatch preview
+      const swatch = content.querySelector('.color-swatch[data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+      if (swatch) {
+        if (textEl.value.trim() === 'null') {
+          swatch.style.backgroundColor = '';
+          swatch.classList.add('null-val');
+        } else {
+          swatch.style.backgroundColor = textEl.value;
+          swatch.classList.remove('null-val');
+        }
+      }
+      syncRuleValue(actionKey, ruleIdx);
+    });
+  }
+}
+
+function renderTab() {
+  const tm = getTypeMapping();
+  let html = renderBitLabels();
+
+  html += '<div class="card"><h2>Mapping Rules</h2>';
+  html += '<p class="help-text">Rules are evaluated top to bottom. <strong>Last matching rule wins</strong> &mdash; put your default/fallback at the top and more specific overrides below it.</p>';
+  const actionKeys = Object.keys(tm.mapping);
+  for (const key of actionKeys) {
+    html += renderActionCard(key, tm.mapping[key]);
+  }
+  html += '<button class="btn btn-sm" data-action="add-action" style="margin-top:8px">+ Add Action</button>';
+  html += '</div>';
+
+  html += '<div class="card"><h2>Import / Export</h2>';
+  html += '<div class="io-row">';
+  html += '<button class="btn" data-action="export">Export ' + activeTab + '-bitmap.json</button>';
+  html += '<button class="btn" data-action="import">Import ' + activeTab + '-bitmap.json</button>';
+  html += '<input type="file" accept=".json" data-action="import-file" style="display:none">';
+  html += '</div>';
+  html += '</div>';
+
+  document.getElementById('tab-content').innerHTML = html;
+  bindColorInputs();
+}
+
+// --- Sync helpers: read current input values back into mappings ---
+
+function syncBitLabels() {
+  const tm = getTypeMapping();
+  const inputs = document.querySelectorAll('input[data-action="bit-label"]');
+  const newLabels = {};
+  for (const inp of inputs) {
+    newLabels[inp.dataset.ref] = inp.value;
+  }
+  tm.bit_labels = newLabels;
+}
+
+function parseValue(raw, actionKey) {
+  if (raw === 'null') return null;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  // Try JSON parse for objects
+  if (raw.startsWith('{') || raw.startsWith('[')) {
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
+  return raw;
+}
+
+function syncRuleValue(actionKey, ruleIdx) {
+  const tm = getTypeMapping();
+  const rules = tm.mapping[actionKey];
+  if (!rules || !rules[ruleIdx]) return;
+
+  if (isColorAction(actionKey)) {
+    const textInput = document.querySelector('input[data-action="value-color-text"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    const textVal = textInput ? textInput.value.trim() : '';
+    if (textVal === 'null') {
+      rules[ruleIdx].value = null;
+    } else if (textVal.startsWith('{') || textVal.startsWith('[')) {
+      rules[ruleIdx].value = parseValue(textVal, actionKey);
+    } else if (textVal) {
+      rules[ruleIdx].value = textVal;
+    }
+  } else if (isBoolAction(actionKey)) {
+    const cb = document.querySelector('input[data-action="value-bool"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    if (cb) {
+      rules[ruleIdx].value = cb.checked;
+    }
+  } else if (isTextAction(actionKey)) {
+    const sel = document.querySelector('select[data-action="value-text-select"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    if (sel) {
+      const key = sel.value;
+      if (key === 'dash') {
+        rules[ruleIdx].value = '-';
+      } else if (key === 'high16' || key === 'low16' || key === 'full') {
+        const fieldInput = document.querySelector('input[data-action="value-text-field"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+        const fieldName = fieldInput ? fieldInput.value.trim() || 'count' : 'count';
+        const obj = { copy_from: fieldName };
+        if (key === 'high16') obj.decode = 'high16';
+        else if (key === 'low16') obj.decode = 'low16';
+        rules[ruleIdx].value = obj;
+      } else if (key === 'custom') {
+        const textInput = document.querySelector('input[data-action="value-text"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+        rules[ruleIdx].value = textInput ? parseValue(textInput.value, actionKey) : '';
+      }
+    }
+  } else {
+    const textInput = document.querySelector('input[data-action="value-text"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    if (textInput) {
+      rules[ruleIdx].value = parseValue(textInput.value, actionKey);
+    }
+  }
+}
+
+function syncRuleCondition(actionKey, ruleIdx) {
+  const tm = getTypeMapping();
+  const rules = tm.mapping[actionKey];
+  if (!rules || !rules[ruleIdx]) return;
+  const rule = rules[ruleIdx];
+
+  const sel = document.querySelector('select[data-action="cond-type"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+  if (!sel) return;
+  const condType = sel.value;
+
+  if (condType === 'default') {
+    rule.condition = { type: 'default' };
+  } else if (condType === 'bits_any' || condType === 'bits_all') {
+    const bitsInput = document.querySelector('input[data-action="cond-bits"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    const refs = bitsInput ? bitsInput.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    rule.condition = { type: 'bits' };
+    if (condType === 'bits_all') {
+      rule.condition.all = refs;
+    } else {
+      rule.condition.any = refs;
+    }
+  } else if (condType === 'range') {
+    const field = document.querySelector('input[data-action="cond-range-field"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    const minI = document.querySelector('input[data-action="cond-range-min"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    const maxI = document.querySelector('input[data-action="cond-range-max"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    rule.condition = { type: 'range', field: field ? field.value : '' };
+    if (minI && minI.value !== '') rule.condition.min = parseFloat(minI.value);
+    if (maxI && maxI.value !== '') rule.condition.max = parseFloat(maxI.value);
+  } else if (condType === 'has_field') {
+    const field = document.querySelector('input[data-action="cond-hasfield"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+    rule.condition = { type: 'has_field', field: field ? field.value : '' };
+  }
+}
+
+function syncAllRules() {
+  const tm = getTypeMapping();
+  for (const [actionKey, rules] of Object.entries(tm.mapping)) {
+    for (let i = 0; i < rules.length; i++) {
+      syncRuleCondition(actionKey, i);
+      syncRuleValue(actionKey, i);
+    }
+  }
+}
+
+// --- Event delegation ---
+
+const content = document.getElementById('tab-content');
+
+content.addEventListener('input', e => {
+  const el = e.target;
+  const action = el.dataset.action;
+  if (!action) return;
+
+  if (action === 'bit-label') {
+    const tm = getTypeMapping();
+    tm.bit_labels[el.dataset.ref] = el.value;
+    return;
+  }
+
+  const actionKey = el.dataset.actionKey;
+  const ruleIdx = parseInt(el.dataset.ruleIdx);
+  if (actionKey === undefined) return;
+
+  // Color text inputs handled by direct listeners in bindColorInputs()
+  if (action === 'value-color-text') {
+    return;
+  } else if (action === 'value-bool') {
+    syncRuleValue(actionKey, ruleIdx);
+  } else if (action === 'value-text' || action === 'value-text-field') {
+    syncRuleValue(actionKey, ruleIdx);
+  } else if (action.startsWith('cond-')) {
+    syncRuleCondition(actionKey, ruleIdx);
+  }
+});
+
+content.addEventListener('change', e => {
+  const el = e.target;
+  const action = el.dataset.action;
+  if (!action) return;
+
+  const actionKey = el.dataset.actionKey;
+  const ruleIdx = parseInt(el.dataset.ruleIdx);
+
+  if (action === 'cond-type') {
+    syncAllRules();
+    // Rebuild condition for this rule with new type
+    const tm = getTypeMapping();
+    const rule = tm.mapping[actionKey][ruleIdx];
+    const condType = el.value;
+    if (condType === 'default') {
+      rule.condition = { type: 'default' };
+    } else if (condType === 'bits_any') {
+      rule.condition = { type: 'bits', any: [] };
+    } else if (condType === 'bits_all') {
+      rule.condition = { type: 'bits', all: [] };
+    } else if (condType === 'range') {
+      rule.condition = { type: 'range', field: '' };
+    } else if (condType === 'has_field') {
+      rule.condition = { type: 'has_field', field: '' };
+    }
+    renderTab();
+  } else if (action === 'value-bool') {
+    syncRuleValue(actionKey, ruleIdx);
+  } else if (action === 'value-text-select') {
+    syncAllRules();
+    renderTab();
+  }
+});
+
+// Close any open palette when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.color-picker-wrap')) {
+    for (const p of content.querySelectorAll('.color-palette.open')) p.classList.remove('open');
+  }
+});
+
+content.addEventListener('click', e => {
+  // Handle palette dot click (pick a color)
+  const dot = e.target.closest('.color-dot');
+  if (dot) {
+    const palette = dot.closest('.color-palette');
+    if (palette) {
+      const actionKey = palette.dataset.actionKey;
+      const ruleIdx = parseInt(palette.dataset.ruleIdx);
+      const color = dot.dataset.color;
+      const swatch = content.querySelector('.color-swatch[data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+      const textEl = content.querySelector('input[data-action="value-color-text"][data-action-key="' + CSS.escape(actionKey) + '"][data-rule-idx="' + ruleIdx + '"]');
+      if (color === 'null') {
+        if (swatch) { swatch.style.backgroundColor = ''; swatch.classList.add('null-val'); }
+        if (textEl) textEl.value = 'null';
+      } else {
+        if (swatch) { swatch.style.backgroundColor = color; swatch.classList.remove('null-val'); }
+        if (textEl) textEl.value = color;
+      }
+      syncRuleValue(actionKey, ruleIdx);
+      palette.classList.remove('open');
+    }
+    return;
+  }
+
+  // Handle swatch click (toggle palette)
+  const swatch = e.target.closest('.color-swatch');
+  if (swatch) {
+    // Close all other palettes first
+    for (const p of content.querySelectorAll('.color-palette.open')) {
+      if (p.dataset.actionKey !== swatch.dataset.actionKey || p.dataset.ruleIdx !== swatch.dataset.ruleIdx) {
+        p.classList.remove('open');
+      }
+    }
+    const palette = swatch.nextElementSibling;
+    if (palette && palette.classList.contains('color-palette')) {
+      palette.classList.toggle('open');
+    }
+    return;
+  }
+
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  const tm = getTypeMapping();
+
+  if (action === 'remove-bit') {
+    syncBitLabels();
+    delete tm.bit_labels[el.dataset.ref];
+    renderTab();
+    return;
+  }
+
+  if (action === 'add-bit') {
+    syncBitLabels();
+    const field = el.dataset.field || 'state';
+    // Find next available bit number for this field
+    const existing = Object.keys(tm.bit_labels)
+      .filter(k => k.startsWith(field + '.'))
+      .map(k => parseInt(k.split('.')[1]));
+    const next = existing.length ? Math.max(...existing) + 1 : 0;
+    tm.bit_labels[field + '.' + next] = '';
+    renderTab();
+    return;
+  }
+
+  const actionKey = el.dataset.actionKey;
+
+  if (action === 'remove-action') {
+    syncAllRules();
+    delete tm.mapping[actionKey];
+    renderTab();
+    return;
+  }
+
+  if (action === 'add-rule') {
+    syncAllRules();
+    tm.mapping[actionKey].push({ condition: { type: 'default' }, value: isBoolAction(actionKey) ? false : (isColorAction(actionKey) ? '#C0C0C0' : '') });
+    renderTab();
+    return;
+  }
+
+  if (action === 'add-action') {
+    syncAllRules();
+    const name = prompt('Action name (e.g. backgroundColor, child.gear.visible):');
+    if (!name || !name.trim()) return;
+    const key = name.trim();
+    if (tm.mapping[key]) { alert('Action already exists.'); return; }
+    tm.mapping[key] = [{ condition: { type: 'default' }, value: isBoolAction(key) ? false : (isColorAction(key) ? '#C0C0C0' : '') }];
+    renderTab();
+    return;
+  }
+
+  if (action === 'export') {
+    syncBitLabels();
+    syncAllRules();
+    const blob = new Blob([JSON.stringify(tm, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = activeTab + '-bitmap.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return;
+  }
+
+  if (action === 'import') {
+    content.querySelector('input[data-action="import-file"]').click();
+    return;
+  }
+
+  const ruleIdx = parseInt(el.dataset.ruleIdx);
+
+  if (action === 'remove-rule') {
+    syncAllRules();
+    tm.mapping[actionKey].splice(ruleIdx, 1);
+    renderTab();
+    return;
+  }
+
+  if (action === 'move-up' && ruleIdx > 0) {
+    syncAllRules();
+    const rules = tm.mapping[actionKey];
+    [rules[ruleIdx - 1], rules[ruleIdx]] = [rules[ruleIdx], rules[ruleIdx - 1]];
+    renderTab();
+    return;
+  }
+
+  if (action === 'move-down') {
+    syncAllRules();
+    const rules = tm.mapping[actionKey];
+    if (ruleIdx < rules.length - 1) {
+      [rules[ruleIdx], rules[ruleIdx + 1]] = [rules[ruleIdx + 1], rules[ruleIdx]];
+      renderTab();
+    }
+    return;
+  }
+});
+
+// Import file handler
+content.addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.action !== 'import-file' || !el.files.length) return;
+  const file = el.files[0];
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!imported.bit_labels || !imported.mapping) {
+        alert('Invalid file: must contain bit_labels and mapping.');
+        return;
+      }
+      syncBitLabels();
+      syncAllRules();
+      mappings[activeTab] = imported;
+      renderTab();
+    } catch (err) {
+      alert('Failed to parse file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  el.value = '';
+});
+
+// Type tabs
+document.querySelector('.type-tabs').addEventListener('click', e => {
+  const tab = e.target.closest('.type-tab');
+  if (!tab || tab.classList.contains('active')) return;
+  syncBitLabels();
+  syncAllRules();
+  activeTab = tab.dataset.type;
+  document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  renderTab();
+});
+
+// Save
+document.getElementById('save-btn').addEventListener('click', async () => {
+  const status = document.getElementById('save-status');
+  syncBitLabels();
+  syncAllRules();
+  status.textContent = 'Saving...';
+  status.className = 'save-status';
+  try {
+    const resp = await fetch('/api/visual-mappings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mappings),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    status.textContent = 'Saved';
+    status.className = 'save-status ok';
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+    status.className = 'save-status err';
+  }
+});
+
+// Reset to defaults
+document.getElementById('reset-btn').addEventListener('click', async () => {
+  if (!confirm('Reset all visual mappings to defaults? Custom rules will be lost.')) return;
+  const status = document.getElementById('save-status');
+  status.textContent = 'Resetting...';
+  status.className = 'save-status';
+  try {
+    const resp = await fetch('/api/visual-mappings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'null',
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    mappings = clone(DEFAULT_MAPPINGS);
+    renderTab();
+    status.textContent = 'Reset to defaults';
+    status.className = 'save-status ok';
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+    status.className = 'save-status err';
+  }
+});
+
+// Init
+loadMappings();
+</script>
+</body>
+</html>

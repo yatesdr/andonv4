@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Dev Tools</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .content {
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+  .card {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    background: #fff;
+  }
+  .card h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: #333;
+    border-bottom: 2px solid #e0a030;
+    padding-bottom: 8px;
+  }
+  .card-desc {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 14px;
+    line-height: 1.5;
+  }
+  .warning-banner {
+    background: #fff3e0;
+    border: 1px solid #ffb74d;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #e65100;
+    line-height: 1.5;
+  }
+  .warning-banner strong { color: #bf360c; }
+  .info-banner {
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: #1565c0;
+    line-height: 1.5;
+  }
+  .form-row {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+  }
+  .form-group input, .form-group select {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .form-group input[type="number"] {
+    width: 90px;
+  }
+  .form-group input[type="date"] {
+    width: 150px;
+  }
+  .btn {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-primary {
+    background: #1976d2;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #1565c0; }
+  .btn-danger {
+    background: #e53935;
+    color: #fff;
+  }
+  .btn-danger:hover { background: #c62828; }
+  .btn-secondary {
+    background: #757575;
+    color: #fff;
+  }
+  .btn-secondary:hover { background: #616161; }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .status-bar {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: monospace;
+  }
+  .status-bar.running {
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    color: #2e7d32;
+  }
+  .status-bar.stopped {
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    color: #757575;
+  }
+  .progress-bar-container {
+    margin-top: 12px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    height: 24px;
+    overflow: hidden;
+    position: relative;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #1976d2;
+    transition: width 0.3s;
+  }
+  .progress-bar-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    line-height: 24px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+  }
+  .verify-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .verify-table th {
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 600;
+  }
+  .verify-table td {
+    border: 1px solid #e0e0e0;
+    padding: 5px 10px;
+  }
+  .verify-table tr.match td { background: #e8f5e9; }
+  .verify-table tr.planned-mismatch td { background: #fffde7; }
+  .verify-table tr.actual-mismatch td { background: #ffebee; }
+  .summary-line {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+  }
+  .gen-result {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #2e7d32;
+  }
+  .checkbox-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .checkbox-row label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .doc-link {
+    font-size: 12px;
+    color: #1976d2;
+    float: right;
+    margin-top: -28px;
+  }
+</style>
+</head>
+<body>
+{{template "nav-bar" .NavData}}
+
+<div class="content">
+
+<div class="warning-banner">
+  <strong>Warning:</strong> Dev Tools write directly to the production database (<code>andon.db</code>).
+  Generated data is <strong>indistinguishable</strong> from real PLC data in reports and exports.
+  Always use <strong>Clear Data</strong> to remove synthetic data before connecting real PLCs.
+  Do not use on production stations with live data you need to preserve.
+</div>
+
+<!-- Section 1: Live Simulator -->
+<div class="card">
+  <h2>Live Simulator</h2>
+  <a class="doc-link" href="https://github.com/yatesdr/andonv4/blob/main/docs/dev-tools.md" target="_blank" title="Open full documentation for the Dev Tools page (simulator, data generator, verification)">? Help</a>
+  <p class="card-desc">
+    Generates real-time PLC events through the full server pipeline (event log, count tracking,
+    behind/overcycle detection, SSE broadcast). Use this to test display pages, verify visual
+    mappings, and stress-test the system. The simulator auto-activates the selected screen and
+    starts a count session. Open the screen's display page (<code>/screens/slug</code>) to see
+    shapes animate in real time.
+  </p>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Screen</label>
+      <select id="sim-screen"
+        title="The screen whose shapes will be simulated. Must have process or press shapes in its layout with takt times configured under Targets."></select>
+    </div>
+    <div class="form-group">
+      <label>Takt Multiplier</label>
+      <input type="number" id="sim-takt" value="1.0" step="0.1" min="0.1"
+        title="Scales the configured takt time for each shape. 1.0 = use the takt time from Targets. 0.5 = twice as fast. 2.0 = twice as slow. Affects man time and machine time proportionally.">
+    </div>
+    <div class="form-group">
+      <label>Time Compression</label>
+      <input type="number" id="sim-compression" value="10" step="1" min="1"
+        title="Speed multiplier for wall-clock time. 10 = a 30s takt completes in 3s. Use 1 for real-time testing of behind/overcycle detection. Higher values (50-100) are useful for quickly generating count data.">
+    </div>
+    <div class="form-group">
+      <label>Fault Prob</label>
+      <input type="number" id="sim-fault" value="0.05" step="0.01" min="0" max="1"
+        title="Probability (0-1) that any given cycle will trigger a fault. A faulted cycle sets bit 3 (faulted) for 5-30 seconds, then resumes. 0.05 = roughly 1 in 20 cycles will fault. Faults generate downtime visible in reports.">
+    </div>
+    <div class="form-group">
+      <label>Andon Prob</label>
+      <input type="number" id="sim-andon" value="0.03" step="0.01" min="0" max="1"
+        title="Probability (0-1) that a cycle will trigger a random andon call (production, maintenance, logistics, etc.). The andon stays active for 10-60 seconds. 0.03 = roughly 1 in 33 cycles.">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Style Values (comma-sep)</label>
+      <input type="text" id="sim-styles" placeholder="1,2,3" style="width:160px"
+        title="PLC style tag values to rotate through (e.g. '1,2,3'). These must match the style values configured in the layout's shape config. Leave empty to skip style rotation. For process shapes, the style value becomes the PartID in the count DINT.">
+    </div>
+    <div class="form-group">
+      <label>Style Interval (s)</label>
+      <input type="number" id="sim-style-interval" value="60" step="10" min="0"
+        title="How often (in real-time seconds, not compressed) to rotate to the next style value. Set to 0 to disable style rotation.">
+    </div>
+    <button class="btn btn-primary" id="sim-start-btn" onclick="simStart()"
+      title="Start the simulator. Activates the screen, begins a count session, and launches per-shape goroutines.">Start</button>
+    <button class="btn btn-danger" id="sim-stop-btn" onclick="simStop()" disabled
+      title="Stop all simulator goroutines for the selected screen. The screen stays active.">Stop</button>
+  </div>
+  <div id="sim-status" class="status-bar stopped">No simulation running</div>
+</div>
+
+<!-- Section 2: Historical Data Generator -->
+<div class="card">
+  <h2>Historical Data Generator</h2>
+  <p class="card-desc">
+    Inserts synthetic data directly into the database for past dates. This populates
+    Production Counts, Shift Reports (all report types), and Shift Summary with realistic data
+    so you can test reporting, exports, and integrations without waiting for real production.
+    Data is inserted via SQL, bypassing the live event pipeline.
+  </p>
+  <div class="info-banner">
+    <strong>Tip:</strong> For reports like Downtime, OEE, Operator Entry, and Andon Response to show data,
+    enable <strong>"Generate process events"</strong> below. This creates state-transition events
+    (fault/clear, clearToEnter/inCycle) that the report walkers analyze. Without events, only
+    Production Counts and Shift Summary will have data.
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Screen</label>
+      <select id="gen-screen"
+        title="The screen to generate data for. All process and press shapes in the layout will get synthetic data. Shapes must have takt times configured under Targets."></select>
+    </div>
+    <div class="form-group">
+      <label>Date From</label>
+      <input type="date" id="gen-from"
+        title="Start date for data generation (inclusive). Defaults to 30 days ago.">
+    </div>
+    <div class="form-group">
+      <label>Date To</label>
+      <input type="date" id="gen-to"
+        title="End date for data generation (inclusive). Defaults to today. Avoid generating data for today if the live simulator or real PLCs are also running — the data will conflict.">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Count Variance</label>
+      <input type="number" id="gen-variance" value="0.15" step="0.05" min="0" max="1"
+        title="Random variance applied to each hour's actual count as a fraction of planned. 0.15 = actual will be between 85% and 115% of planned. Set to 0 for exact planned counts. Higher values create more realistic-looking variation in charts.">
+    </div>
+    <div class="form-group">
+      <label>Fault Prob</label>
+      <input type="number" id="gen-fault" value="0.1" step="0.05" min="0" max="1"
+        title="Probability per cycle of a simulated fault. When events are enabled, this creates fault/clear state transitions in process_events that appear in the Downtime report. Also reduces that cycle's output in hourly_counts. 0.1 = ~10% of cycles will fault.">
+    </div>
+    <div class="form-group">
+      <label>Andon Prob</label>
+      <input type="number" id="gen-andon" value="0.05" step="0.01" min="0" max="1"
+        title="Probability per cycle of a simulated andon call. When events are enabled, creates andon bit transitions in process_events visible in the Andon Response report. A random andon type (production, maintenance, etc.) is chosen each time.">
+    </div>
+  </div>
+  <div class="checkbox-row">
+    <label title="Generate state-transition rows in process_events. Required for daily reports (Downtime, OEE, Operator Entry, Andon Response, etc.). Significantly increases generation time and DB size — roughly 4-5 events per cycle per shape.">
+      <input type="checkbox" id="gen-events" checked> Generate process events
+    </label>
+    <label title="Generate pre-computed shift_summary rows. Required for the Shift Summary report type. If disabled, you can still use Recompute in the Reports page to generate summaries from events.">
+      <input type="checkbox" id="gen-summary" checked> Generate shift summaries
+    </label>
+  </div>
+  <div class="form-row">
+    <button class="btn btn-primary" id="gen-btn" onclick="genStart()"
+      title="Start generating data. Runs in the background — progress bar updates automatically. The screen does not need to be active.">Generate</button>
+    <button class="btn btn-danger" id="gen-clear-btn" onclick="genClear()"
+      title="Delete ALL generated data (hourly_counts, process_events, shift_summary) for the selected screen and date range. This is irreversible. Use this to clean up before connecting real PLCs.">Clear Data</button>
+  </div>
+  <div id="gen-progress" style="display:none">
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" id="gen-bar" style="width:0%"></div>
+      <div class="progress-bar-label" id="gen-bar-label">0%</div>
+    </div>
+  </div>
+  <div id="gen-result" class="gen-result" style="display:none"></div>
+</div>
+
+<!-- Section 3: Verification -->
+<div class="card">
+  <h2>Verification</h2>
+  <p class="card-desc">
+    Compares the exact values the generator inserted (ground truth) against what the production
+    API returns when querying hourly counts. This validates that the full read pipeline
+    (aggregation, style grouping, shift bucketing) produces correct results. Green = match,
+    yellow = planned mismatch, red = actual count mismatch.
+  </p>
+  <div class="info-banner">
+    <strong>Note:</strong> Ground truth is held in memory from the last Generate run. If you
+    restart the server, you'll need to regenerate before verifying. Verification only checks
+    hourly_counts data, not process_events or shift_summary.
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Screen</label>
+      <select id="verify-screen"
+        title="The screen to verify. Must match the screen used for the last Generate run."></select>
+    </div>
+    <button class="btn btn-secondary" id="verify-btn" onclick="runVerify()"
+      title="Query the hourly counts API for each ground truth entry and compare expected vs reported values.">Run Verification</button>
+  </div>
+  <div id="verify-summary" class="summary-line" style="display:none"></div>
+  <div id="verify-table-container" style="overflow-x:auto"></div>
+</div>
+
+</div>
+
+<script src="/static/utils.js"></script>
+<script>
+const screens = {{.ScreensJSON}};
+
+function populateScreenDropdowns() {
+  ['sim-screen','gen-screen','verify-screen'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '';
+    screens.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = JSON.stringify({id: s.id, slug: s.slug, name: s.name});
+      opt.textContent = s.name;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function getScreen(selId) {
+  const sel = document.getElementById(selId);
+  return sel.value ? JSON.parse(sel.value) : null;
+}
+
+function initDates() {
+  const today = new Date();
+  const to = localDateStr(today);
+  const from = new Date(today);
+  from.setDate(from.getDate() - 30);
+  document.getElementById('gen-to').value = to;
+  document.getElementById('gen-from').value = localDateStr(from);
+}
+
+// --- Simulator ---
+let simPollTimer = null;
+
+async function simStart() {
+  const sc = getScreen('sim-screen');
+  if (!sc) return;
+
+  const styleStr = document.getElementById('sim-styles').value.trim();
+  const styleValues = styleStr ? styleStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
+
+  const cfg = {
+    screen_slug: sc.slug,
+    screen_id: sc.id,
+    takt_multiplier: parseFloat(document.getElementById('sim-takt').value) || 1,
+    time_compression: parseFloat(document.getElementById('sim-compression').value) || 10,
+    fault_prob: parseFloat(document.getElementById('sim-fault').value) || 0,
+    andon_prob: parseFloat(document.getElementById('sim-andon').value) || 0,
+    style_values: styleValues,
+    style_interval: parseInt(document.getElementById('sim-style-interval').value) || 0,
+  };
+
+  const resp = await fetch('/api/devtools/sim/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(cfg),
+  });
+  if (!resp.ok) {
+    const err = await resp.json();
+    alert('Start failed: ' + (err.error || resp.statusText));
+    return;
+  }
+
+  document.getElementById('sim-start-btn').disabled = true;
+  document.getElementById('sim-stop-btn').disabled = false;
+  startSimPoll();
+}
+
+async function simStop() {
+  const sc = getScreen('sim-screen');
+  if (!sc) return;
+
+  await fetch('/api/devtools/sim/stop', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({screen_slug: sc.slug}),
+  });
+
+  document.getElementById('sim-start-btn').disabled = false;
+  document.getElementById('sim-stop-btn').disabled = true;
+  stopSimPoll();
+  document.getElementById('sim-status').className = 'status-bar stopped';
+  document.getElementById('sim-status').textContent = 'Simulation stopped';
+}
+
+function startSimPoll() {
+  stopSimPoll();
+  simPollTimer = setInterval(pollSimStatus, 2000);
+  pollSimStatus();
+}
+
+function stopSimPoll() {
+  if (simPollTimer) { clearInterval(simPollTimer); simPollTimer = null; }
+}
+
+async function pollSimStatus() {
+  try {
+    const resp = await fetch('/api/devtools/sim/status');
+    const statuses = await resp.json();
+    const el = document.getElementById('sim-status');
+    if (statuses.length === 0) {
+      el.className = 'status-bar stopped';
+      el.textContent = 'No simulation running';
+      document.getElementById('sim-start-btn').disabled = false;
+      document.getElementById('sim-stop-btn').disabled = true;
+      return;
+    }
+    const lines = statuses.map(s =>
+      s.screen_slug + ': ' + s.shapes_active + ' shapes, ' +
+      s.total_events.toLocaleString() + ' events (since ' + new Date(s.started_at).toLocaleTimeString() + ')'
+    );
+    el.className = 'status-bar running';
+    el.textContent = lines.join('\n');
+    document.getElementById('sim-start-btn').disabled = false;
+    document.getElementById('sim-stop-btn').disabled = false;
+  } catch(e) {}
+}
+
+// --- Data Generator ---
+let genPollTimer = null;
+
+async function genStart() {
+  const sc = getScreen('gen-screen');
+  if (!sc) return;
+
+  const cfg = {
+    screen_id: sc.id,
+    date_from: document.getElementById('gen-from').value,
+    date_to: document.getElementById('gen-to').value,
+    count_variance: parseFloat(document.getElementById('gen-variance').value) || 0,
+    fault_prob: parseFloat(document.getElementById('gen-fault').value) || 0,
+    andon_prob: parseFloat(document.getElementById('gen-andon').value) || 0,
+    gen_events: document.getElementById('gen-events').checked,
+    gen_summary: document.getElementById('gen-summary').checked,
+  };
+
+  if (!cfg.date_from || !cfg.date_to) {
+    alert('Date range required');
+    return;
+  }
+
+  document.getElementById('gen-btn').disabled = true;
+  document.getElementById('gen-result').style.display = 'none';
+  document.getElementById('gen-progress').style.display = 'block';
+
+  const resp = await fetch('/api/devtools/generate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(cfg),
+  });
+  if (!resp.ok) {
+    const err = await resp.json();
+    alert('Generate failed: ' + (err.error || resp.statusText));
+    document.getElementById('gen-btn').disabled = false;
+    document.getElementById('gen-progress').style.display = 'none';
+    return;
+  }
+
+  startGenPoll();
+}
+
+function startGenPoll() {
+  stopGenPoll();
+  genPollTimer = setInterval(pollGenProgress, 1000);
+}
+
+function stopGenPoll() {
+  if (genPollTimer) { clearInterval(genPollTimer); genPollTimer = null; }
+}
+
+async function pollGenProgress() {
+  try {
+    const resp = await fetch('/api/devtools/generate/progress');
+    const data = await resp.json();
+    const pct = Math.round(data.progress * 100);
+    document.getElementById('gen-bar').style.width = pct + '%';
+    document.getElementById('gen-bar-label').textContent = pct + '%';
+
+    if (!data.running && data.progress >= 1 && data.result) {
+      stopGenPoll();
+      document.getElementById('gen-btn').disabled = false;
+      const r = data.result;
+      document.getElementById('gen-result').style.display = 'block';
+      document.getElementById('gen-result').textContent =
+        'Generated: ' + r.hourly_rows + ' hourly rows, ' +
+        r.event_rows + ' events, ' + r.summary_rows + ' summaries';
+    }
+  } catch(e) {}
+}
+
+async function genClear() {
+  const sc = getScreen('gen-screen');
+  if (!sc) return;
+  const from = document.getElementById('gen-from').value;
+  const to = document.getElementById('gen-to').value;
+  if (!from || !to) { alert('Date range required'); return; }
+  if (!confirm('Delete ALL data (hourly counts, process events, shift summaries) for ' + sc.name + ' from ' + from + ' to ' + to + '?\n\nThis is irreversible.')) return;
+
+  const resp = await fetch('/api/devtools/clear', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({screen_id: sc.id, date_from: from, date_to: to}),
+  });
+  const data = await resp.json();
+  if (resp.ok) {
+    document.getElementById('gen-result').style.display = 'block';
+    document.getElementById('gen-result').textContent = 'Deleted ' + data.deleted + ' rows';
+    document.getElementById('gen-progress').style.display = 'none';
+  } else {
+    alert('Clear failed: ' + (data.error || resp.statusText));
+  }
+}
+
+// --- Verification ---
+async function runVerify() {
+  const sc = getScreen('verify-screen');
+  if (!sc) return;
+
+  document.getElementById('verify-btn').disabled = true;
+  document.getElementById('verify-summary').style.display = 'none';
+  document.getElementById('verify-table-container').innerHTML = 'Running...';
+
+  try {
+    const resp = await fetch('/api/devtools/verify', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({screen_id: sc.id}),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      document.getElementById('verify-table-container').innerHTML = 'Error: ' + (data.error || resp.statusText);
+      return;
+    }
+
+    const sum = document.getElementById('verify-summary');
+    sum.style.display = 'block';
+    const actPct = data.total > 0 ? Math.round(data.actual_matches / data.total * 100) : 0;
+    const plnPct = data.total > 0 ? Math.round(data.planned_matches / data.total * 100) : 0;
+    sum.textContent = data.total + ' rows checked: actual match ' + actPct + '%, planned match ' + plnPct + '%';
+
+    if (!data.rows || data.rows.length === 0) {
+      document.getElementById('verify-table-container').innerHTML = '<p>No data to verify. Run Generate first.</p>';
+      return;
+    }
+
+    const rows = data.rows;
+    let html = '<table class="verify-table"><tr>' +
+      '<th>Shape</th><th>Shift</th><th>Date</th><th>Hour</th>' +
+      '<th>Exp Actual</th><th>Got Actual</th>' +
+      '<th>Exp Planned</th><th>Got Planned</th></tr>';
+
+    const maxRows = Math.min(rows.length, 200);
+    for (let i = 0; i < maxRows; i++) {
+      const r = rows[i];
+      let cls = 'match';
+      if (!r.actual_match) cls = 'actual-mismatch';
+      else if (!r.planned_match) cls = 'planned-mismatch';
+      html += '<tr class="' + cls + '">' +
+        '<td>' + esc(r.shape_name || r.shape_id.substring(0,8)) + '</td>' +
+        '<td>' + esc(r.shift_name) + '</td>' +
+        '<td>' + r.count_date + '</td>' +
+        '<td>' + r.shift_hour + '</td>' +
+        '<td>' + r.exp_actual + '</td><td>' + r.got_actual + '</td>' +
+        '<td>' + r.exp_planned + '</td><td>' + r.got_planned + '</td></tr>';
+    }
+    if (rows.length > maxRows) {
+      html += '<tr><td colspan="8" style="text-align:center;color:#999">... ' +
+        (rows.length - maxRows) + ' more rows</td></tr>';
+    }
+    html += '</table>';
+    document.getElementById('verify-table-container').innerHTML = html;
+  } finally {
+    document.getElementById('verify-btn').disabled = false;
+  }
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Init
+populateScreenDropdowns();
+initDates();
+pollSimStatus();
+startSimPoll();
+</script>
+</body>
+</html>

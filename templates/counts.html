@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Production Counts</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .counts-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    flex-wrap: wrap;
+  }
+  .counts-toolbar label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+  }
+  .counts-toolbar select,
+  .counts-toolbar input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+  }
+  .date-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .date-nav button {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f7f8fa;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .date-nav button:hover { background: #e8e9ed; }
+  .export-buttons { margin-left: auto; }
+  .export-buttons button {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f7f8fa;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .export-buttons button:hover { background: #e8e9ed; }
+  .counts-content {
+    padding: 16px 24px;
+    overflow-x: auto;
+  }
+  .counts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 600px;
+  }
+  .counts-table th,
+  .counts-table td {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .counts-table th {
+    background: #f0f1f5;
+    font-weight: 600;
+    font-size: 12px;
+    color: #555;
+  }
+  .counts-table .op-header td {
+    text-align: left;
+    font-weight: 700;
+    font-size: 14px;
+    background: #e0e2e8;
+    border-bottom: 2px solid #ccc;
+  }
+  .counts-table .shift-row td {
+    font-weight: 600;
+    background: #fafbfc;
+  }
+  .counts-table .shift-row td:first-child {
+    text-align: left;
+  }
+  .counts-table .planned-row td {
+    color: #888;
+    font-size: 12px;
+    background: #fafbfc;
+  }
+  .counts-table .style-row td {
+    font-size: 12px;
+    color: #444;
+  }
+  .counts-table .style-row td:nth-child(2) {
+    text-align: left;
+    font-style: italic;
+  }
+  .counts-table .total-row td {
+    font-weight: 700;
+    background: #f0f1f5;
+  }
+  .counts-table .total-row.planned-row td {
+    font-weight: 600;
+    color: #888;
+  }
+  .counts-table .early-col,
+  .counts-table .overtime-col {
+    background: #fef9e7;
+  }
+  .behind { color: #c0392b; }
+  .ahead { color: #27ae60; }
+  .no-data {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+    font-size: 15px;
+  }
+</style>
+</head>
+<body>
+
+{{template "nav-bar" .}}
+
+<div class="counts-toolbar">
+  <label>Screen</label>
+  <select id="screen-select">
+    {{range .Screens}}
+    <option value="{{.ID}}"{{if eq .ID $.ActiveScreen}} selected{{end}}>{{.Name}}</option>
+    {{end}}
+  </select>
+
+  <label>Date</label>
+  <div class="date-nav">
+    <button id="date-prev" title="Previous day">&larr;</button>
+    <input type="date" id="date-input" value="{{.Date}}">
+    <button id="date-next" title="Next day">&rarr;</button>
+  </div>
+
+  <label>Operation</label>
+  <select id="shape-select"><option value="">All</option></select>
+
+  <span class="export-buttons">
+    <button id="export-csv" title="Export CSV">CSV</button>
+    <button id="export-xlsx" title="Export XLSX">XLSX</button>
+  </span>
+</div>
+
+<div class="counts-content">
+  <div id="counts-table-container">
+    <div class="no-data">Loading...</div>
+  </div>
+  <div style="width:80%;margin:24px auto 0;text-align:left">
+    <p style="margin:0;font-size:12px;color:#888">
+      When an ANDON screen is turned on, it will look for configured shifts that start in the next 30 minutes and select that shift.
+      If no shift is scheduled to start in the next 30 minutes, it will use the current shift if there is one.
+      Production made before the official start is early production, and production after the shift end is considered overtime.
+      If no shifts are found now or in the next 30 minutes, it will assume a new shift that lasts 8 hours just started and record production out of schedule.
+    </p>
+  </div>
+</div>
+
+<script src="/static/utils.js"></script>
+<script>
+(function() {
+  const screenSel = document.getElementById('screen-select');
+  const dateInput = document.getElementById('date-input');
+  const shapeSel  = document.getElementById('shape-select');
+  const container = document.getElementById('counts-table-container');
+  const prevBtn   = document.getElementById('date-prev');
+  const nextBtn   = document.getElementById('date-next');
+
+  if (!dateInput.value) {
+    dateInput.value = localDateStr();
+  }
+
+  let pollTimer = null;
+  let lastShapeKeys = '';
+
+  function fetchCounts() {
+    const params = new URLSearchParams({
+      screen: screenSel.value,
+      date: dateInput.value
+    });
+    if (shapeSel.value) params.set('shape', shapeSel.value);
+
+    fetch('/api/hourly-counts?' + params)
+      .then(r => r.json())
+      .then(data => {
+        renderTable(data);
+        updateFilters(data);
+        schedulePoll();
+      })
+      .catch(() => {
+        container.innerHTML = '<div class="no-data">Error loading data</div>';
+        schedulePoll();
+      });
+  }
+
+  function schedulePoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    const today = localDateStr();
+    if (dateInput.value === today) {
+      pollTimer = setTimeout(fetchCounts, 5000);
+    }
+  }
+
+  function updateFilters(data) {
+    const ops = data.operations || [];
+    const key = ops.map(o => o.shape_id + ':' + o.name).join(',');
+    if (key !== lastShapeKeys) {
+      lastShapeKeys = key;
+      const cur = shapeSel.value;
+      shapeSel.innerHTML = '<option value="">All</option>';
+      for (const op of ops) {
+        const opt = document.createElement('option');
+        opt.value = op.shape_id;
+        opt.textContent = op.name;
+        if (op.shape_id === cur) opt.selected = true;
+        shapeSel.appendChild(opt);
+      }
+    }
+  }
+
+  // Hour columns from server: [{clock, index, label}, ...]
+  function collectAllHours(data) {
+    return data.hours || [];
+  }
+
+  // Build hour map from a data hours array (keyed by shift_hour)
+  function toHourMap(hours) {
+    const m = {};
+    for (const h of hours || []) m[h.shift_hour] = h;
+    return m;
+  }
+
+  // Past/future cutoff: returns true if the hour column is in the past
+  function isHourPast(col) {
+    const today = localDateStr();
+    if (dateInput.value < today) return true;
+    if (dateInput.value > today) return false;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const endMin = (col.start_min + 60) % 1440;
+    // Handle overnight hour (start_min > endMin means it wraps midnight)
+    if (col.start_min > endMin) {
+      return nowMin >= endMin && nowMin < col.start_min ? true : nowMin >= col.start_min ? false : true;
+    }
+    return nowMin >= endMin;
+  }
+
+  // Render a data row (actual values). allHours = [{shift_hour, index, label, start_min}, ...]
+  function dataRow(allHours, hourMap, early, overtime, total) {
+    let html = '<td class="early-col">' + (early || '-') + '</td>';
+    for (const col of allHours) {
+      const cell = hourMap[col.shift_hour];
+      if (cell && cell.actual) {
+        let tdCls = '';
+        if (cell.planned > 0) {
+          const diff = cell.actual - cell.planned;
+          tdCls = diff < 0 ? ' class="behind"' : diff > 0 ? ' class="ahead"' : '';
+        }
+        html += '<td' + tdCls + '>' + cell.actual + '</td>';
+      } else if (isHourPast(col)) {
+        html += '<td>0</td>';
+      } else {
+        html += '<td>-</td>';
+      }
+    }
+    html += '<td class="overtime-col">' + (overtime || '-') + '</td>';
+    html += '<td>' + (total || 0) + '</td>';
+    return html;
+  }
+
+  // Render a planned row
+  function plannedRow(allHours, hourMap, totalPlanned, colSpan) {
+    let html = '<tr class="planned-row">';
+    html += '<td style="text-align:left" colspan="' + colSpan + '">Planned</td>';
+    html += '<td class="early-col">-</td>';
+    for (const col of allHours) {
+      const cell = hourMap[col.shift_hour];
+      html += '<td>' + (cell && cell.planned ? cell.planned : '-') + '</td>';
+    }
+    html += '<td class="overtime-col">-</td>';
+    html += '<td>' + (totalPlanned || '-') + '</td>';
+    html += '</tr>';
+    return html;
+  }
+
+  function renderTable(data) {
+    const ops = data.operations || [];
+    const allHours = collectAllHours(data);
+    if (ops.length === 0 && allHours.length === 0) {
+      container.innerHTML = '<div class="no-data">No production data for this date.</div>';
+      return;
+    }
+    if (ops.length === 0) {
+      container.innerHTML = '<div class="no-data">No production data for this date.</div>';
+      return;
+    }
+    const numCols = 2 + 1 + allHours.length + 1 + 1; // shift + style + early + hours + OT + total
+
+    let html = '<table class="counts-table">';
+
+    // Header — shift hour (bold) over clock time
+    html += '<thead><tr>';
+    html += '<th style="text-align:left">Shift</th>';
+    html += '<th style="text-align:left">Style</th>';
+    html += '<th class="early-col">Early</th>';
+    for (const col of allHours) {
+      html += '<th><b>' + col.index + '</b><br><small>' + col.label + '</small></th>';
+    }
+    html += '<th class="overtime-col">OT</th>';
+    html += '<th>Total</th>';
+    html += '</tr></thead>';
+
+    html += '<tbody>';
+
+    for (const op of ops) {
+      // Operation header row
+      html += '<tr class="op-header">';
+      html += '<td colspan="' + numCols + '">' + esc(op.name) + '</td>';
+      html += '</tr>';
+
+      for (const shift of op.shifts || []) {
+        const shiftHourMap = toHourMap(shift.hours);
+        const hasMultipleStyles = (shift.styles || []).length > 1;
+
+        // Shift actual row
+        html += '<tr class="shift-row">';
+        html += '<td>' + esc(shift.name) + '<br><small style="font-weight:400;color:#888">' + esc(shift.time_range || '') + '</small></td>';
+        html += '<td></td>'; // style column empty for shift row
+        html += dataRow(allHours, shiftHourMap, shift.early, shift.overtime, shift.total_actual);
+        html += '</tr>';
+
+        // Shift planned row
+        html += plannedRow(allHours, shiftHourMap, shift.total_planned, 2);
+
+        // Style sub-rows (only if multiple styles)
+        if (hasMultipleStyles) {
+          for (const st of shift.styles) {
+            const stHourMap = toHourMap(st.hours);
+            html += '<tr class="style-row">';
+            html += '<td></td>'; // shift column empty
+            html += '<td>' + esc(st.style_name) + '</td>';
+            html += dataRow(allHours, stHourMap, st.early, st.overtime, st.total_actual);
+            html += '</tr>';
+          }
+        }
+      }
+    }
+
+    // Grand total row
+    html += '<tr class="total-row">';
+    html += '<td style="text-align:left" colspan="2">Grand Total</td>';
+    // Sum early, hours, OT across all operations and shifts
+    let earlySum = 0, otSum = 0;
+    const grandHourMap = {};
+    for (const op of ops) {
+      for (const shift of op.shifts || []) {
+        earlySum += shift.early || 0;
+        otSum += shift.overtime || 0;
+        for (const h of shift.hours || []) {
+          if (!grandHourMap[h.shift_hour]) grandHourMap[h.shift_hour] = { actual: 0, planned: 0 };
+          grandHourMap[h.shift_hour].actual += h.actual;
+          grandHourMap[h.shift_hour].planned += h.planned;
+        }
+      }
+    }
+    html += '<td class="early-col">' + (earlySum || '-') + '</td>';
+    for (const col of allHours) {
+      const g = grandHourMap[col.shift_hour];
+      if (g && g.actual) {
+        html += '<td>' + g.actual + '</td>';
+      } else if (isHourPast(col)) {
+        html += '<td>0</td>';
+      } else {
+        html += '<td>-</td>';
+      }
+    }
+    html += '<td class="overtime-col">' + (otSum || '-') + '</td>';
+    html += '<td>' + (data.grand_total_actual || 0) + '</td>';
+    html += '</tr>';
+
+    // Grand total planned row
+    html += '<tr class="total-row planned-row">';
+    html += '<td style="text-align:left" colspan="2">Planned</td>';
+    html += '<td class="early-col">-</td>';
+    for (const col of allHours) {
+      const g = grandHourMap[col.shift_hour];
+      html += '<td>' + (g && g.planned ? g.planned : '-') + '</td>';
+    }
+    html += '<td class="overtime-col">-</td>';
+    html += '<td>' + (data.grand_total_planned || '-') + '</td>';
+    html += '</tr>';
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  // Event listeners
+  screenSel.addEventListener('change', fetchCounts);
+  dateInput.addEventListener('change', fetchCounts);
+  shapeSel.addEventListener('change', fetchCounts);
+
+  prevBtn.addEventListener('click', () => {
+    const d = parseLocalDate(dateInput.value);
+    d.setDate(d.getDate() - 1);
+    dateInput.value = localDateStr(d);
+    fetchCounts();
+  });
+  nextBtn.addEventListener('click', () => {
+    const d = parseLocalDate(dateInput.value);
+    d.setDate(d.getDate() + 1);
+    dateInput.value = localDateStr(d);
+    fetchCounts();
+  });
+
+  // Export buttons
+  function buildExportURL(ext) {
+    const params = new URLSearchParams({
+      screen: screenSel.value,
+      from: dateInput.value,
+      to: dateInput.value
+    });
+    if (shapeSel.value) params.set('shape', shapeSel.value);
+    return '/api/export/hourly-counts.' + ext + '?' + params;
+  }
+  document.getElementById('export-csv').addEventListener('click', () => {
+    window.location.href = buildExportURL('csv');
+  });
+  document.getElementById('export-xlsx').addEventListener('click', () => {
+    window.location.href = buildExportURL('xlsx');
+  });
+
+  // Initial load
+  fetchCounts();
+})();
+</script>
+
+</body>
+</html>

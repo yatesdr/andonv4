@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Settings</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .content {
+    max-width: 700px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+
+  .url-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .url-row input { flex: 1; }
+  .status-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ccc;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .status-dot.online { background: #4caf50; }
+  .status-dot.offline { background: #e53935; }
+  .status-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #999;
+  }
+  .status-label.online { color: #2e7d32; }
+  .status-label.offline { color: #c62828; }
+
+  .save-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Shifts */
+  .shift-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .shift-card .shift-remove {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .shift-card .shift-remove:hover { color: #e53935; background: #fde; }
+  .shift-header {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .shift-header .sh-field { flex: 1; min-width: 120px; }
+  .shift-header .sh-field label {
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    color: #777;
+    margin-bottom: 3px;
+  }
+  .shift-header .sh-field input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .hours-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #777;
+    margin-bottom: 6px;
+  }
+  .hours-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+  .hour-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 52px;
+  }
+  .hour-cell .hour-label {
+    font-size: 10px;
+    color: #999;
+    margin-bottom: 1px;
+  }
+  .hour-val {
+    padding: 3px 2px;
+    font-size: 13px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    text-decoration: underline dashed #aaa;
+    text-underline-offset: 3px;
+  }
+  .hour-val:hover { color: #4a90d9; }
+  .hour-cell input {
+    width: 100%;
+    padding: 3px 2px;
+    border: none;
+    border-bottom: 1px solid #4a90d9;
+    font-size: 13px;
+    text-align: center;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+  .hour-cell input::-webkit-inner-spin-button,
+  .hour-cell input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .no-hours {
+    font-size: 12px;
+    color: #999;
+    font-style: italic;
+  }
+
+  /* Backup */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .toggle-row > label:not(.toggle-switch) { font-weight: 600; flex: 1; cursor: pointer; }
+  .toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+  }
+  .toggle-switch input {
+    opacity: 0; width: 0; height: 0;
+  }
+  .toggle-switch .slider {
+    position: absolute;
+    inset: 0;
+    background: #ccc;
+    border-radius: 22px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toggle-switch .slider::before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    left: 3px; bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle-switch input:checked + .slider { background: #4a90d9; }
+  .toggle-switch input:checked + .slider::before { transform: translateX(18px); }
+  .backup-fields { margin-left: 4px; }
+  .backup-fields.collapsed { display: none; }
+  .backup-status {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    background: #fafafa;
+  }
+  .backup-status div { margin-bottom: 4px; }
+  .backup-status .bs-label { color: #777; font-weight: 600; }
+  .backup-status .bs-val { color: #333; }
+  .backup-status .bs-error { color: #c62828; }
+</style>
+</head>
+<body>
+
+{{template "nav-bar" .}}
+
+<div class="content">
+  <div class="card">
+    <h2>Station</h2>
+    <div class="field">
+      <label>Station Name</label>
+      <input type="text" id="station-name" placeholder="e.g. Plant 1 Assembly">
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-weight:600;font-size:12px;color:#777;margin-bottom:3px">Station ID</label>
+      <div style="font-family:monospace;font-size:13px;color:#666;background:#f5f5f5;padding:8px 12px;border-radius:6px;border:1px solid #e0e0e0;user-select:all" id="station-id-display"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Warlink Server</h2>
+    <div class="field">
+      <label>Server URL</label>
+      <div class="url-row">
+        <input type="text" id="warlink-url" placeholder="http://192.168.1.100:8080">
+        <button class="btn" id="warlink-test">Test</button>
+      </div>
+    </div>
+    <div id="warlink-status" style="margin-top:8px;display:none;">
+      <span class="status-dot" id="warlink-dot"></span>
+      <span class="status-label" id="warlink-label"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Backup</h2>
+
+    <div class="toggle-row">
+      <label for="s3-enabled">S3 / RustFS Backup</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="s3-enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="backup-fields collapsed" id="s3-fields">
+      <div class="field">
+        <label>Endpoint</label>
+        <input type="text" id="s3-endpoint" placeholder="rustfs.factory.local:9000">
+      </div>
+      <div class="field">
+        <label>Bucket</label>
+        <input type="text" id="s3-bucket" placeholder="andon-backups">
+      </div>
+      <div class="field">
+        <label>Access Key</label>
+        <input type="text" id="s3-access-key" placeholder="AKIAIOSFODNN7EXAMPLE">
+      </div>
+      <div class="field">
+        <label>Secret Key</label>
+        <input type="password" id="s3-secret-key" placeholder="Enter secret key">
+      </div>
+      <div class="field">
+        <label style="display:inline;margin-right:8px">Use SSL</label>
+        <input type="checkbox" id="s3-use-ssl">
+      </div>
+    </div>
+
+    <div class="toggle-row" style="margin-top:16px">
+      <label for="central-enabled">Central Server Backup</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="central-enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="backup-fields collapsed" id="central-fields">
+      <div class="field">
+        <label>URL</label>
+        <input type="text" id="central-url" placeholder="https://backup.factory.local">
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:16px">
+      <label>Backup Interval (minutes)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="periodic-minutes" min="0" style="width:100px" placeholder="60">
+        <span style="font-size:12px;color:#999">0 = disabled</span>
+      </div>
+    </div>
+
+    <div class="backup-status" id="backup-status" style="display:none">
+      <div><span class="bs-label">Last config push:</span> <span class="bs-val" id="bs-config"></span></div>
+      <div><span class="bs-label">Last full backup:</span> <span class="bs-val" id="bs-full"></span></div>
+      <div><span class="bs-label">Next scheduled:</span> <span class="bs-val" id="bs-next"></span></div>
+      <div><span class="bs-label">Current DB slot:</span> <span class="bs-val" id="bs-slot"></span></div>
+      <div id="bs-error-row" style="display:none"><span class="bs-label">Last error:</span> <span class="bs-val bs-error" id="bs-error"></span></div>
+    </div>
+
+    <button class="btn" id="backup-now-btn" style="margin-top:8px">Backup Now</button>
+  </div>
+
+  <div class="card">
+    <h2>E-Maintenance Integration</h2>
+    <div class="toggle-row">
+      <label for="emaint-enabled">Enable E-Maintenance</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="emaint-enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="backup-fields collapsed" id="emaint-fields">
+      <div class="field">
+        <label>Server URL</label>
+        <div class="url-row">
+          <input type="text" id="emaint-url" placeholder="https://emaint.factory.local/api">
+          <button class="btn" id="emaint-test">Test</button>
+        </div>
+      </div>
+      <div id="emaint-status" style="margin-top:8px;display:none;">
+        <span class="status-dot" id="emaint-dot"></span>
+        <span class="status-label" id="emaint-label"></span>
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input type="password" id="emaint-api-key" placeholder="Enter API key">
+      </div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="emaint-username" placeholder="service-account">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Shifts</h2>
+    <div id="shifts-container"></div>
+    <button class="btn" id="add-shift">+ Add Shift</button>
+  </div>
+
+  <div class="save-row">
+    <button class="btn btn-primary" id="save-btn">Save Global Settings</button>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <h2>Change Password</h2>
+    <div id="pw-msg" class="msg"></div>
+    <div class="field">
+      <label>Current Password</label>
+      <input type="password" id="pw-current">
+    </div>
+    <div class="field">
+      <label>New Password</label>
+      <input type="password" id="pw-new">
+    </div>
+    <div class="field">
+      <label>Confirm New Password</label>
+      <input type="password" id="pw-confirm">
+    </div>
+    <button class="btn btn-primary" id="pw-btn">Update Password</button>
+  </div>
+</div>
+
+<script src="/static/utils.js"></script>
+<script>
+const settings = {{.SettingsJSON}};
+
+const stationNameInput = document.getElementById('station-name');
+stationNameInput.value = settings.station_name || '';
+document.getElementById('station-id-display').textContent = settings.station_id || '';
+
+const warlinkInput = document.getElementById('warlink-url');
+warlinkInput.value = settings.warlink_url || '';
+
+// --- Backup UI ---
+if (!settings.backup) settings.backup = {};
+const bk = settings.backup;
+
+const s3Toggle = document.getElementById('s3-enabled');
+const s3Fields = document.getElementById('s3-fields');
+const centralToggle = document.getElementById('central-enabled');
+const centralFields = document.getElementById('central-fields');
+
+s3Toggle.checked = !!bk.s3_enabled;
+s3Fields.classList.toggle('collapsed', !s3Toggle.checked);
+document.getElementById('s3-endpoint').value = bk.s3_endpoint || '';
+document.getElementById('s3-bucket').value = bk.s3_bucket || '';
+document.getElementById('s3-access-key').value = bk.s3_access_key || '';
+document.getElementById('s3-secret-key').value = bk.s3_secret_key || '';
+document.getElementById('s3-use-ssl').checked = !!bk.s3_use_ssl;
+
+centralToggle.checked = !!bk.central_enabled;
+centralFields.classList.toggle('collapsed', !centralToggle.checked);
+document.getElementById('central-url').value = bk.central_url || '';
+document.getElementById('periodic-minutes').value = bk.periodic_minutes || '';
+
+s3Toggle.addEventListener('change', () => {
+  s3Fields.classList.toggle('collapsed', !s3Toggle.checked);
+});
+centralToggle.addEventListener('change', () => {
+  centralFields.classList.toggle('collapsed', !centralToggle.checked);
+});
+
+function gatherBackup() {
+  return {
+    s3_enabled: s3Toggle.checked,
+    s3_endpoint: document.getElementById('s3-endpoint').value.trim(),
+    s3_bucket: document.getElementById('s3-bucket').value.trim(),
+    s3_access_key: document.getElementById('s3-access-key').value.trim(),
+    s3_secret_key: document.getElementById('s3-secret-key').value,
+    s3_use_ssl: document.getElementById('s3-use-ssl').checked,
+    central_enabled: centralToggle.checked,
+    central_url: document.getElementById('central-url').value.trim(),
+    periodic_minutes: parseInt(document.getElementById('periodic-minutes').value) || 0,
+  };
+}
+
+// Backup status polling
+function fmtTime(s) {
+  if (!s) return '(never)';
+  const d = new Date(s);
+  if (isNaN(d.getTime()) || d.getFullYear() < 2000) return '(never)';
+  return d.toLocaleString();
+}
+
+async function pollBackupStatus() {
+  try {
+    const resp = await fetch('/api/backup/status');
+    if (!resp.ok) return;
+    const st = await resp.json();
+    if (st.enabled === false) return;
+    const box = document.getElementById('backup-status');
+    box.style.display = '';
+    document.getElementById('bs-config').textContent = fmtTime(st.last_config_push);
+    document.getElementById('bs-full').textContent = fmtTime(st.last_full_backup);
+    document.getElementById('bs-next').textContent = fmtTime(st.next_scheduled);
+    document.getElementById('bs-slot').textContent = (st.current_slot != null ? st.current_slot : 0) + ' of 3';
+    const errRow = document.getElementById('bs-error-row');
+    if (st.last_error) {
+      errRow.style.display = '';
+      document.getElementById('bs-error').textContent = st.last_error;
+    } else {
+      errRow.style.display = 'none';
+    }
+  } catch {}
+}
+pollBackupStatus();
+setInterval(pollBackupStatus, 10000);
+
+document.getElementById('backup-now-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('backup-now-btn');
+  btn.disabled = true;
+  btn.textContent = 'Backing up...';
+  try {
+    await fetch('/api/backup/trigger', { method: 'POST' });
+    setTimeout(() => { pollBackupStatus(); btn.disabled = false; btn.textContent = 'Backup Now'; }, 2000);
+  } catch {
+    btn.disabled = false;
+    btn.textContent = 'Backup Now';
+  }
+});
+
+// --- E-Maintenance UI ---
+if (!settings.emaint) settings.emaint = {};
+const emaintToggle = document.getElementById('emaint-enabled');
+const emaintFields = document.getElementById('emaint-fields');
+emaintToggle.checked = !!settings.emaint.enabled;
+emaintFields.classList.toggle('collapsed', !emaintToggle.checked);
+document.getElementById('emaint-url').value = settings.emaint.url || '';
+document.getElementById('emaint-api-key').value = settings.emaint.api_key || '';
+document.getElementById('emaint-username').value = settings.emaint.username || '';
+
+emaintToggle.addEventListener('change', () => {
+  emaintFields.classList.toggle('collapsed', !emaintToggle.checked);
+});
+
+document.getElementById('emaint-test').addEventListener('click', async () => {
+  const url = document.getElementById('emaint-url').value.trim();
+  const statusEl = document.getElementById('emaint-status');
+  const dot = document.getElementById('emaint-dot');
+  const label = document.getElementById('emaint-label');
+  if (!url) { statusEl.style.display = 'none'; return; }
+  dot.className = 'status-dot';
+  label.className = 'status-label';
+  label.textContent = 'Testing...';
+  statusEl.style.display = '';
+  try {
+    const resp = await fetch('/api/emaint/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (data.online) {
+      dot.className = 'status-dot online';
+      label.className = 'status-label online';
+      label.textContent = 'Online';
+    } else {
+      dot.className = 'status-dot offline';
+      label.className = 'status-label offline';
+      label.textContent = data.message || 'Offline';
+    }
+  } catch {
+    dot.className = 'status-dot offline';
+    label.className = 'status-label offline';
+    label.textContent = 'Connection error';
+  }
+});
+
+// Warlink connection test
+document.getElementById('warlink-test').addEventListener('click', async () => {
+  const url = warlinkInput.value.trim();
+  const statusEl = document.getElementById('warlink-status');
+  const dot = document.getElementById('warlink-dot');
+  const label = document.getElementById('warlink-label');
+  if (!url) { statusEl.style.display = 'none'; return; }
+  dot.className = 'status-dot';
+  label.className = 'status-label';
+  label.textContent = 'Testing...';
+  statusEl.style.display = '';
+  try {
+    const resp = await fetch('/api/warlink/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (data.online) {
+      dot.className = 'status-dot online';
+      label.className = 'status-label online';
+      label.textContent = 'Online';
+    } else {
+      dot.className = 'status-dot offline';
+      label.className = 'status-label offline';
+      label.textContent = 'Offline';
+    }
+  } catch {
+    dot.className = 'status-dot offline';
+    label.className = 'status-label offline';
+    label.textContent = 'Offline';
+  }
+});
+
+// Parse "HH:MM" to total minutes from midnight
+function parseTime(t) {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Format minutes-from-midnight as "H:MMa" or "H:MMp"
+function timeLabel(min) {
+  min = ((min % 1440) + 1440) % 1440;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  const suffix = h < 12 ? 'a' : 'p';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return h12 + ':' + String(m).padStart(2, '0') + suffix;
+}
+
+// Compute shift-relative hours and default minutes for a shift
+// Returns [{startMin, defaultMin}] where startMin is minutes from midnight
+function computeHours(start, end) {
+  const s = parseTime(start);
+  let e = parseTime(end);
+  if (s === null || e === null || s === e) return [];
+  let duration = e - s;
+  if (duration < 0) duration += 1440; // overnight
+  const count = Math.ceil(duration / 60);
+  const hours = [];
+  for (let i = 0; i < count; i++) {
+    const blockStart = (s + i * 60) % 1440;
+    const actualEnd = Math.min((i + 1) * 60, duration);
+    hours.push({ startMin: blockStart, defaultMin: actualEnd - i * 60 });
+  }
+  return hours;
+}
+
+const shiftsContainer = document.getElementById('shifts-container');
+
+function hoursHTML(sh, i) {
+  const hours = computeHours(sh.start, sh.end);
+  if (!sh.minutes || sh.minutes.length !== hours.length) {
+    sh.minutes = hours.map(h => h.defaultMin);
+  }
+  if (hours.length > 0) {
+    let html = '<div class="hours-label">Planned work minutes by hour</div>';
+    html += '<div class="hours-grid">';
+    hours.forEach((h, hi) => {
+      const val = sh.minutes[hi] != null ? sh.minutes[hi] : h.defaultMin;
+      html += '<div class="hour-cell">';
+      html += '<span class="hour-label">' + timeLabel(h.startMin) + '-' + timeLabel(h.startMin + h.defaultMin) + '</span>';
+      html += '<span class="hour-val" data-idx="' + i + '" data-hidx="' + hi + '">' + val + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  } else if (sh.start && sh.end) {
+    return '<div class="no-hours">Start and end times cannot be the same</div>';
+  }
+  return '<div class="no-hours">Set start and end times to configure hours</div>';
+}
+
+function renderShifts() {
+  shiftsContainer.innerHTML = '';
+  if (!settings.shifts) settings.shifts = [];
+  settings.shifts.forEach((sh, i) => {
+    const div = document.createElement('div');
+    div.className = 'shift-card';
+
+    let html = '<button type="button" class="shift-remove" data-idx="' + i + '">&times;</button>';
+    html += '<div class="shift-header">';
+    html += '<div class="sh-field"><label>Name</label><input type="text" value="' + esc(sh.name) + '" data-idx="' + i + '" data-field="name"></div>';
+    html += '<div class="sh-field"><label>Start</label><input type="time" value="' + esc(sh.start) + '" data-idx="' + i + '" data-field="start"></div>';
+    html += '<div class="sh-field"><label>End</label><input type="time" value="' + esc(sh.end) + '" data-idx="' + i + '" data-field="end"></div>';
+    html += '</div>';
+    html += '<div class="hours-area" data-idx="' + i + '">' + hoursHTML(sh, i) + '</div>';
+
+    div.innerHTML = html;
+    shiftsContainer.appendChild(div);
+  });
+}
+
+renderShifts();
+
+shiftsContainer.addEventListener('input', e => {
+  const inp = e.target;
+  if (inp.dataset.idx === undefined) return;
+  const i = +inp.dataset.idx;
+  const sh = settings.shifts[i];
+
+  if (inp.dataset.field) {
+    sh[inp.dataset.field] = inp.value;
+    if (inp.dataset.field === 'start' || inp.dataset.field === 'end') {
+      const hours = computeHours(sh.start, sh.end);
+      sh.minutes = hours.map(h => h.defaultMin);
+      const area = shiftsContainer.querySelector('.hours-area[data-idx="' + i + '"]');
+      if (area) area.innerHTML = hoursHTML(sh, i);
+    }
+  }
+});
+
+function startEdit(span) {
+  if (span.querySelector('input')) return;
+  const i = +span.dataset.idx;
+  const hi = +span.dataset.hidx;
+  const sh = settings.shifts[i];
+  const val = sh.minutes[hi] != null ? sh.minutes[hi] : 0;
+
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.max = '60';
+  input.value = val;
+  span.textContent = '';
+  span.appendChild(input);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const n = input.value === '' ? 0 : Math.max(0, Math.min(60, parseInt(input.value) || 0));
+    sh.minutes[hi] = n;
+    span.textContent = n;
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { span.textContent = val; }
+  });
+}
+
+shiftsContainer.addEventListener('click', e => {
+  const span = e.target.closest('.hour-val');
+  if (span) { startEdit(span); return; }
+
+  const btn = e.target.closest('.shift-remove');
+  if (btn) {
+    settings.shifts.splice(+btn.dataset.idx, 1);
+    renderShifts();
+  }
+});
+
+document.getElementById('add-shift').addEventListener('click', () => {
+  if (!settings.shifts) settings.shifts = [];
+  settings.shifts.push({ name: '', start: '', end: '', minutes: [] });
+  renderShifts();
+  const inputs = shiftsContainer.querySelectorAll('input[data-field="name"]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+});
+
+document.getElementById('save-btn').addEventListener('click', async () => {
+  settings.station_name = stationNameInput.value.trim();
+  settings.warlink_url = warlinkInput.value.trim();
+  settings.backup = gatherBackup();
+  settings.emaint = {
+    enabled: emaintToggle.checked,
+    url: document.getElementById('emaint-url').value.trim(),
+    api_key: document.getElementById('emaint-api-key').value,
+    username: document.getElementById('emaint-username').value.trim(),
+  };
+  const resp = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (resp.ok) {
+    window.location.href = '/';
+  }
+});
+
+document.getElementById('pw-btn').addEventListener('click', async () => {
+  const msg = document.getElementById('pw-msg');
+  const cur = document.getElementById('pw-current').value;
+  const newPw = document.getElementById('pw-new').value;
+  const confirmPw = document.getElementById('pw-confirm').value;
+
+  msg.style.display = 'none';
+
+  if (!cur) {
+    msg.className = 'msg msg-err'; msg.textContent = 'Current password is required.'; msg.style.display = 'block';
+    return;
+  }
+  if (!newPw) {
+    msg.className = 'msg msg-err'; msg.textContent = 'New password is required.'; msg.style.display = 'block';
+    return;
+  }
+  if (newPw !== confirmPw) {
+    msg.className = 'msg msg-err'; msg.textContent = 'New passwords do not match.'; msg.style.display = 'block';
+    return;
+  }
+
+  const resp = await fetch('/api/auth/password', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_password: cur, new_password: newPw }),
+  });
+  if (resp.ok) {
+    msg.className = 'msg msg-ok'; msg.textContent = 'Password updated successfully.'; msg.style.display = 'block';
+    document.getElementById('pw-current').value = '';
+    document.getElementById('pw-new').value = '';
+    document.getElementById('pw-confirm').value = '';
+  } else {
+    const text = await resp.text();
+    msg.className = 'msg msg-err'; msg.textContent = text || 'Failed to update password.'; msg.style.display = 'block';
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.Screen.Name}} - Andon Display</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+  }
+  canvas {
+    display: block;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #mute-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  #mute-overlay.active {
+    display: flex;
+  }
+  #mute-overlay img {
+    max-width: 40vw;
+    max-height: 40vh;
+  }
+
+</style>
+</head>
+<body>
+
+<canvas id="canvas" width="1920" height="1080"></canvas>
+
+<div id="cell-popover">
+  <div class="popover-header">
+    <div>
+      <h3 id="popover-title"></h3>
+      <span class="popover-type" id="popover-type"></span>
+    </div>
+    <button class="popover-close" id="popover-close">&times;</button>
+  </div>
+  <div class="popover-body" id="popover-body"></div>
+</div>
+
+<div id="mute-overlay">
+  <img src="/static/elements/mre.png" alt="MRE">
+</div>
+
+<script type="module">
+import { CANVAS_W, CANVAS_H, renderFrame, hydrateShapes, loadImage, hitTest, DEFAULT_MAPPINGS, evaluateMapping, applyMappingResult, resolveBit, startFlashTimer } from '/static/render.js';
+startFlashTimer();
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const muteOverlay = document.getElementById('mute-overlay');
+
+let shapes = [];
+let overlayState = { overlay_active: false, overlay_text: '', mute_active: false };
+let screenOverlay = { active: false, text: '' };
+let screenActive = true;
+let andonActive = true;
+let statusBannerText = '';
+
+// Live PLC data keyed by shape ID — stores raw DINT values
+const liveData = new Map();
+// Shape display names for status messages (shape id → label text)
+const shapeNames = new Map();
+let openPopoverShapeId = null;
+
+// Scale canvas to fill viewport while maintaining 16:9 aspect ratio
+function fitCanvas() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scale = Math.min(vw / CANVAS_W, vh / CANVAS_H);
+  canvas.style.width = (CANVAS_W * scale) + 'px';
+  canvas.style.height = (CANVAS_H * scale) + 'px';
+}
+fitCanvas();
+window.addEventListener('resize', fitCanvas);
+
+// Preload
+loadImage('/static/elements/mre.png');
+
+// Load layout from template data
+const layoutData = {{.Layout}};
+if (layoutData && Array.isArray(layoutData)) {
+  shapes = hydrateShapes(layoutData);
+}
+
+// Build shape name map from label children
+function buildShapeNames() {
+  shapeNames.clear();
+  for (const s of shapes) {
+    if (s.type !== 'process' && s.type !== 'press') continue;
+    const cfg = s.config || {};
+    let name = s.id;
+    if (cfg.children) {
+      for (const c of cfg.children) {
+        if (c.type === 'label' && c.text) { name = c.text; break; }
+      }
+    }
+    shapeNames.set(s.id, name);
+  }
+}
+buildShapeNames();
+
+// Load visual mappings (custom overrides or defaults)
+let visualMappings = DEFAULT_MAPPINGS;
+fetch('/api/visual-mappings').then(r => r.json()).then(m => { if (m) visualMappings = m; }).catch(() => {});
+
+// Initialize all process/press shapes to default gray, icons hidden
+function initDefaultState() {
+  for (const s of shapes) {
+    if (s.type !== 'process' && s.type !== 'press') continue;
+    if (!s.config) continue;
+    const typeMapping = visualMappings[s.type];
+    if (!typeMapping) continue;
+    const result = evaluateMapping(typeMapping, null);
+    applyMappingResult(s.config, result, null);
+  }
+}
+initDefaultState();
+
+// Apply overlay/mute state
+function applyOverlay() {
+  if (overlayState.mute_active) {
+    muteOverlay.classList.add('active');
+  } else {
+    muteOverlay.classList.remove('active');
+  }
+  updateStatusBanner();
+}
+
+// Apply live PLC state to shape visuals each frame
+function applyLiveState() {
+  plcStatusMessages.length = 0;
+  for (const s of shapes) {
+    if (s.type !== 'process' && s.type !== 'press') continue;
+    const cfg = s.config;
+    if (!cfg || !cfg.state_tag) continue;
+
+    const d = liveData.get(s.id);
+    const typeMapping = visualMappings[s.type];
+    if (!typeMapping) continue;
+    const result = evaluateMapping(typeMapping, d);
+    applyMappingResult(cfg, result, d);
+
+    if (result.statusMessage) {
+      const name = shapeNames.get(s.id) || s.id;
+      const msg = typeof result.statusMessage === 'object'
+        ? { text: name + ': ' + result.statusMessage.text, color: result.statusMessage.color }
+        : { text: name + ': ' + result.statusMessage };
+      plcStatusMessages.push(msg);
+    }
+  }
+  updateStatusBanner();
+}
+
+// PLC-driven status messages collected each frame
+let plcStatusMessages = [];
+let statusBannerColor = '#0000FF'; // default blue
+
+// Resolve statusBannerText from all sources.
+// Priority: screen overlay > PLC status messages > global overlay
+function updateStatusBanner() {
+  if (screenOverlay.active) {
+    statusBannerText = screenOverlay.text;
+    statusBannerColor = '#0000FF';
+  } else if (plcStatusMessages.length > 0) {
+    // Use the color from the first message that has one, else default
+    statusBannerColor = plcStatusMessages[0].color || '#0000FF';
+    statusBannerText = plcStatusMessages.map(m => m.text).join('  |  ');
+  } else if (overlayState.overlay_active && overlayState.overlay_text) {
+    statusBannerText = overlayState.overlay_text;
+    statusBannerColor = '#0000FF';
+  } else {
+    statusBannerText = '';
+  }
+}
+
+// Fetch current global state and apply on load
+fetch('/api/global').then(r => r.json()).then(g => {
+  overlayState = g;
+  andonActive = g.andon_active !== false;
+  applyOverlay();
+}).catch(() => {});
+
+// SSE
+const slug = '{{.Screen.Slug}}';
+let currentES = null;
+function connectSSE() {
+  const es = new EventSource('/events/' + slug);
+  currentES = es;
+
+  es.addEventListener('update', e => {
+    try {
+      const data = JSON.parse(e.data);
+      // Full layout replacement
+      if (Array.isArray(data)) {
+        shapes = hydrateShapes(data);
+        buildShapeNames();
+        initDefaultState();
+        applyOverlay();
+      }
+    } catch (err) {
+      console.error('SSE update error:', err);
+    }
+  });
+
+  es.addEventListener('state', e => {
+    try {
+      const data = JSON.parse(e.data);
+      andonActive = data.andon_active !== false;
+      overlayState = data;
+      applyOverlay();
+    } catch (err) {
+      console.error('SSE state error:', err);
+    }
+  });
+
+  es.addEventListener('screen_overlay', e => {
+    try {
+      screenOverlay = JSON.parse(e.data);
+      applyOverlay();
+    } catch (err) {
+      console.error('SSE screen_overlay error:', err);
+    }
+  });
+
+  es.addEventListener('screen_active', e => {
+    try {
+      const data = JSON.parse(e.data);
+      screenActive = data.active;
+    } catch (err) {
+      console.error('SSE screen_active error:', err);
+    }
+  });
+
+  es.addEventListener('cell_data', e => {
+    try {
+      const msg = JSON.parse(e.data);
+      // Merge partial updates (state-only, count-only, buffer-only)
+      const existing = liveData.get(msg.shapeId) || { type: msg.type };
+      Object.assign(existing, msg.data);
+      liveData.set(msg.shapeId, existing);
+      if (openPopoverShapeId === msg.shapeId) {
+        renderPopoverBody(msg.shapeId);
+      }
+    } catch (err) {
+      console.error('SSE cell_data error:', err);
+    }
+  });
+
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) {
+      console.warn('SSE connection closed, reconnecting in 3s...');
+      currentES = null;
+      setTimeout(connectSSE, 3000);
+    } else {
+      console.warn('SSE connection error, browser will retry...');
+    }
+  };
+}
+connectSSE();
+
+// Close SSE on navigation to free HTTP/2 connection immediately
+window.addEventListener('beforeunload', () => { if (currentES) currentES.close(); });
+
+// --- Cell popover click handling ---
+const popover = document.getElementById('cell-popover');
+const popoverTitle = document.getElementById('popover-title');
+const popoverType = document.getElementById('popover-type');
+const popoverBody = document.getElementById('popover-body');
+
+document.getElementById('popover-close').addEventListener('click', closePopover);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopover(); });
+
+// Drag popover by header
+{
+  const header = document.querySelector('.popover-header');
+  header.style.cursor = 'grab';
+  let dragging = false, startX, startY, origLeft, origTop;
+  header.addEventListener('mousedown', e => {
+    if (e.target.closest('.popover-close')) return;
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    origLeft = popover.offsetLeft;
+    origTop = popover.offsetTop;
+    header.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    popover.style.left = (origLeft + e.clientX - startX) + 'px';
+    popover.style.top = (origTop + e.clientY - startY) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (dragging) {
+      dragging = false;
+      header.style.cursor = 'grab';
+    }
+  });
+}
+
+function closePopover() {
+  popover.classList.remove('open');
+  openPopoverShapeId = null;
+}
+
+// Check if a config object has any PLC tag properties set
+function hasTags(cfg) {
+  if (!cfg) return false;
+  return !!(cfg.plc || cfg.tag || cfg.count_tag || cfg.state_tag || cfg.style_tag || cfg.coil_tag);
+}
+
+// Get label for a shape or child
+function getLabel(shape, child) {
+  if (child) {
+    if (child.text) return child.text;
+    return child.type;
+  }
+  const cfg = shape.config || {};
+  if (cfg.children) {
+    for (const c of cfg.children) {
+      if (c.type === 'label' && c.text) return c.text;
+    }
+  }
+  return shape.id;
+}
+
+// Build tag rows HTML from a config
+function tagRowsHTML(cfg) {
+  const tags = [
+    ['PLC', cfg.plc],
+    ['Count Tag', cfg.count_tag],
+    ['State Tag', cfg.state_tag],
+    ['Style Tag', cfg.style_tag],
+    ['Coil Tag', cfg.coil_tag],
+    ['Tag', cfg.tag],
+  ];
+  let html = '';
+  for (const [label, value] of tags) {
+    if (value) {
+      html += '<div class="popover-tag-row">'
+        + '<span class="popover-tag-label">' + label + '</span>'
+        + '<span class="popover-tag-value">' + value + '</span>'
+        + '</div>';
+    }
+  }
+  return html;
+}
+
+// --- Detail table rendering ---
+
+// Safe nested property access
+function val(obj, path) {
+  if (!obj) return undefined;
+  return path.split('.').reduce((o, k) => (o != null ? o[k] : undefined), obj);
+}
+
+// Display value or placeholder
+function v(value) {
+  return value != null && value !== '' ? String(value) : '--';
+}
+
+// Bit state row helper
+function bitRow(label, value) {
+  const on = value === true;
+  return '<tr><td class="pv-label">' + label + '</td>'
+    + '<td class="' + (on ? 'popover-bit-on' : 'popover-bit-off') + '">'
+    + (on ? 'ON' : 'OFF') + '</td></tr>';
+}
+
+// Section header row
+function sectionHeader(text, cols) {
+  return '<tr class="popover-section-header"><td colspan="' + cols + '">' + text + '</td></tr>';
+}
+
+// 4-col data row: label, value, label, value
+function row4(l1, v1, l2, v2) {
+  return '<tr><td class="pv-label">' + l1 + '</td><td class="pv-value">' + v(v1) + '</td>'
+    + '<td class="pv-label">' + l2 + '</td><td class="pv-value">' + v(v2) + '</td></tr>';
+}
+
+// 2-col span row: label spanning 2 cols, value spanning 2 cols
+function row2(label, value) {
+  return '<tr><td colspan="2" class="pv-label">' + label + '</td>'
+    + '<td colspan="2" class="pv-value">' + v(value) + '</td></tr>';
+}
+
+// Full-width label row (4 cols)
+function rowLabel4(text) {
+  return '<tr><td colspan="4" class="pv-label">' + text + '</td></tr>';
+}
+
+// Full-width value row (4 cols)
+function rowValue4(value) {
+  return '<tr><td colspan="4" class="pv-value">' + v(value) + '</td></tr>';
+}
+
+function renderBitTable(d, shapeType) {
+  const typeMapping = visualMappings[shapeType];
+  const bitLabels = typeMapping ? typeMapping.bit_labels || {} : {};
+
+  // Partition labels by field prefix (state vs computedState)
+  const fields = {};
+  for (const [key, label] of Object.entries(bitLabels)) {
+    const dot = key.indexOf('.');
+    if (dot < 0) continue;
+    const field = key.substring(0, dot);
+    const n = parseInt(key.substring(dot + 1), 10);
+    if (isNaN(n)) continue;
+    if (!fields[field]) fields[field] = { maxBit: -1, labels: {} };
+    fields[field].labels[n] = label;
+    if (n > fields[field].maxBit) fields[field].maxBit = n;
+  }
+
+  let bits = '<table class="popover-table"><tbody>';
+  for (const [field, info] of Object.entries(fields)) {
+    const heading = field === 'state' ? 'Bit State' : field;
+    bits += sectionHeader(heading, 2);
+    for (let i = 0; i <= info.maxBit; i++) {
+      const ref = field + '.' + i;
+      const label = info.labels[i] || ref;
+      const on = d && d[field] != null ? resolveBit(ref, d) : false;
+      bits += bitRow(label, on);
+    }
+  }
+  bits += '</tbody></table>';
+  return bits;
+}
+
+function renderProcessTable(d) {
+  const pc = d.count != null ? { part_id: d.count & 0xFFFF, counter: (d.count >> 16) & 0xFFFF } : {};
+  const bc = d.buffer != null ? { counter: (d.buffer >> 16) & 0xFFFF } : {};
+  let config = '<table class="popover-table"><tbody>';
+
+  // Op Config
+  config += sectionHeader('Op Config', 4);
+  config += rowLabel4('Line Name');
+  config += rowValue4(val(d, 'op_config.line_name'));
+  config += row2('Op Name', val(d, 'op_config.operation_name'));
+  const eol = val(d, 'op_config.job.eol');
+  config += row2('EOL', eol != null ? (eol === 1 ? 'True' : 'False') : undefined);
+
+  // Counters
+  config += '<tr class="popover-section-header"><td colspan="2">Prod Counter</td><td colspan="2">Buffer Counter</td></tr>';
+  config += row4('Part ID', pc.part_id, 'Counter', bc.counter);
+  config += row4('Counter', pc.counter, '', undefined);
+
+  // Job Config
+  config += sectionHeader('Job Config', 4);
+  config += row4('Job ID', val(d, 'op_config.job.job_id'), 'Job Name', val(d, 'op_config.job.job_name'));
+  config += row4('Op CT', val(d, 'op_config.job.op_ct'), 'Op ET', val(d, 'op_config.job.op_et'));
+  config += row4('Ma CT', val(d, 'op_config.job.ma_ct'), 'Takt T', val(d, 'op_config.job.takt_t'));
+  config += row2('Plan', val(d, 'op_config.current_target'));
+
+  // Schedule
+  config += sectionHeader('Schedule ID: ' + v(val(d, 'op_config.job.schedule_id')), 4);
+  config += row4('Shift', val(d, 'op_config.schedule.main_schedule.shift'), 'Weekday', val(d, 'op_config.schedule.main_schedule.weekday'));
+  config += row4('Start', val(d, 'op_config.schedule.main_schedule.start'), 'Stop', val(d, 'op_config.schedule.main_schedule.stop'));
+
+  // Raw DINT values
+  config += sectionHeader('Raw DINT', 4);
+  config += row4('State', d.state != null ? '0x' + (d.state >>> 0).toString(16).toUpperCase() : undefined,
+                 'Count', d.count != null ? '0x' + (d.count >>> 0).toString(16).toUpperCase() : undefined);
+  config += row4('Buffer', d.buffer != null ? '0x' + (d.buffer >>> 0).toString(16).toUpperCase() : undefined,
+                 'Computed', d.computedState != null ? '0x' + (d.computedState >>> 0).toString(16).toUpperCase() : undefined);
+
+  config += '</tbody></table>';
+
+  return '<div class="popover-tables">' + config + renderBitTable(d, 'process') + '</div>';
+}
+
+function renderPressTable(d) {
+  let config = '<table class="popover-table"><tbody>';
+
+  // Counters — press uses raw count (stroke counter) and buffer
+  config += '<tr class="popover-section-header"><td colspan="2">Stroke Counter</td><td colspan="2">Coil</td></tr>';
+  config += row4('Count', d.count, 'Coil %', d.coilPct);
+
+  // Raw DINT values
+  config += sectionHeader('Raw DINT', 4);
+  config += row4('State', d.state != null ? '0x' + (d.state >>> 0).toString(16).toUpperCase() : undefined,
+                 'Count', d.count != null ? '0x' + (d.count >>> 0).toString(16).toUpperCase() : undefined);
+  config += row4('Buffer', d.buffer != null ? '0x' + (d.buffer >>> 0).toString(16).toUpperCase() : undefined,
+                 'Coil', d.coilPct != null ? '0x' + (d.coilPct >>> 0).toString(16).toUpperCase() : undefined);
+  config += row4('Computed', d.computedState != null ? '0x' + (d.computedState >>> 0).toString(16).toUpperCase() : undefined, '', undefined);
+
+  config += '</tbody></table>';
+
+  return '<div class="popover-tables">' + config + renderBitTable(d, 'press') + '</div>';
+}
+
+function renderPopoverBody(shapeId) {
+  const shape = shapes.find(s => s.id === shapeId);
+  if (!shape) return;
+
+  const cfg = shape.config || {};
+  const tagSource = hasTags(cfg) ? cfg : null;
+  let html = tagSource ? tagRowsHTML(tagSource) : '';
+
+  const d = liveData.get(shapeId);
+  if (d) {
+    if (d.type === 'press' || shape.type === 'press') {
+      html += renderPressTable(d);
+    } else {
+      html += renderProcessTable(d);
+    }
+  } else {
+    html += '<div class="popover-no-data">Waiting for PLC data\u2026</div>';
+  }
+
+  popoverBody.innerHTML = html;
+}
+
+// Hit-test: returns { shape, child } or null
+// Children checked first (more specific), then parent bounding box
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CANVAS_W / rect.width;
+  const scaleY = CANVAS_H / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top) * scaleY;
+
+  const hit = hitTest(shapes, cx, cy);
+  if (!hit) { closePopover(); return; }
+
+  const { shape, child } = hit;
+  const label = getLabel(shape, child);
+  const typeName = child ? child.type : shape.type;
+
+  popoverTitle.textContent = label;
+  popoverType.textContent = typeName;
+
+  // For child clicks, show child tag info; for parent clicks, show detail tables
+  if (child) {
+    const cfg = child;
+    const tagSource = hasTags(cfg) ? cfg : (hasTags(shape.config) ? shape.config : null);
+    if (tagSource) {
+      popoverBody.innerHTML = tagRowsHTML(tagSource);
+    } else {
+      popoverBody.innerHTML = '<div class="popover-stub">No PLC tags configured</div>';
+    }
+    openPopoverShapeId = null;
+  } else {
+    openPopoverShapeId = shape.id;
+    renderPopoverBody(shape.id);
+  }
+
+  // Position popover near click, clamped to viewport using actual dimensions
+  popover.classList.add('open');
+  const pw = popover.offsetWidth;
+  const ph = popover.offsetHeight;
+  const px = Math.max(8, Math.min(e.clientX + 12, window.innerWidth - pw - 8));
+  const py = Math.max(8, Math.min(e.clientY - 20, window.innerHeight - ph - 8));
+  popover.style.left = px + 'px';
+  popover.style.top = py + 'px';
+});
+
+// Close popover on click outside
+document.addEventListener('mousedown', e => {
+  if (popover.classList.contains('open') && !popover.contains(e.target) && e.target !== canvas) {
+    closePopover();
+  }
+});
+
+// Render loop
+function draw() {
+  applyLiveState();
+  renderFrame(ctx, shapes);
+  if (statusBannerText) {
+    ctx.save();
+    const fontSize = 52;
+    const pad = 22;
+    ctx.font = `900 ${fontSize}px "Arial Black", Impact, sans-serif`;
+    const tw = ctx.measureText(statusBannerText).width;
+    const bw = tw + pad * 2;
+    const bh = fontSize + pad * 1.2;
+    ctx.fillStyle = statusBannerColor;
+    ctx.fillRect(CANVAS_W - bw, 0, bw, bh);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(statusBannerText, CANVAS_W - pad, bh / 2);
+    ctx.restore();
+  }
+  if (!screenActive) {
+    ctx.save();
+    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('*FINAL', 20, 16);
+    ctx.restore();
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

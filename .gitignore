@@ -1,0 +1,23 @@
+# Binary
+andon
+andon.exe
+build/
+
+# Data
+*.db
+*.json
+!go.mod
+!go.sum
+*-recording.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev artifacts
+PLAN.md
+
+# IDE / Tools
+.claude/
+.vscode/
+.idea/

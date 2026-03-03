@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          mkdir -p build
+
+          GOOS=linux   GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/andon-linux-amd64      ./cmd/andon
+          GOOS=linux   GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/andon-linux-arm64      ./cmd/andon
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/andon-darwin-amd64     ./cmd/andon
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/andon-darwin-arm64     ./cmd/andon
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/andon-windows-amd64.exe ./cmd/andon
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            build/andon-linux-amd64
+            build/andon-linux-arm64
+            build/andon-darwin-amd64
+            build/andon-darwin-arm64
+            build/andon-windows-amd64.exe

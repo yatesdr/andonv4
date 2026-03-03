@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Shift Reports</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .reports-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    flex-wrap: wrap;
+  }
+  .reports-toolbar label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+  }
+  .reports-toolbar select,
+  .reports-toolbar input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+  }
+  .date-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .date-nav button {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f7f8fa;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .date-nav button:hover { background: #e8e9ed; }
+  .export-buttons { margin-left: auto; }
+  .export-buttons button {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f7f8fa;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .export-buttons button:hover { background: #e8e9ed; }
+  .export-buttons button.recompute {
+    border-color: #5b9bd5;
+    color: #2a6496;
+  }
+  .export-buttons button.recompute:hover { background: #dce9f5; }
+  .export-buttons button.recompute:disabled { opacity: 0.6; cursor: default; }
+  .reports-content {
+    padding: 16px 24px;
+    overflow-x: auto;
+  }
+  .reports-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 600px;
+  }
+  .reports-table th,
+  .reports-table td {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .reports-table th {
+    background: #f0f1f5;
+    font-weight: 600;
+    font-size: 12px;
+    color: #555;
+  }
+  .reports-table .op-header td {
+    text-align: left;
+    font-weight: 700;
+    font-size: 14px;
+    background: #e0e2e8;
+    border-bottom: 2px solid #ccc;
+  }
+  .reports-table .shift-row td {
+    font-weight: 600;
+    background: #fafbfc;
+  }
+  .reports-table .shift-row td:first-child {
+    text-align: left;
+  }
+  .reports-table .andon-row td {
+    font-size: 12px;
+    color: #444;
+  }
+  .reports-table .andon-row td:first-child {
+    text-align: left;
+    padding-left: 24px;
+    font-style: italic;
+  }
+  .no-data {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+    font-size: 15px;
+  }
+  .oee-good { color: #27ae60; }
+  .oee-warn { color: #e67e22; }
+  .oee-bad { color: #c0392b; }
+  #trend-chart-wrap {
+    display: none;
+    max-width: 900px;
+    margin: 20px auto;
+  }
+  .hidden { display: none !important; }
+  .loading-indicator {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+    font-size: 15px;
+  }
+  .loading-indicator::after {
+    content: '';
+    display: block;
+    width: 28px;
+    height: 28px;
+    margin: 14px auto 0;
+    border: 3px solid #ddd;
+    border-top-color: #1976d2;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .reports-toolbar select:disabled,
+  .reports-toolbar input:disabled,
+  .reports-toolbar button:disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+{{template "nav-bar" .}}
+
+<div class="reports-toolbar">
+  <label>Screen</label>
+  <select id="screen-select" title="Select the screen/cell to report on">
+    {{range .Screens}}
+    <option value="{{.ID}}"{{if eq .ID $.ActiveScreen}} selected{{end}}>{{.Name}}</option>
+    {{end}}
+  </select>
+
+  <label>Report</label>
+  <select id="report-select" title="Choose the report type to display">
+    <optgroup label="Daily Shift Reports">
+      <option value="downtime" title="Total time in faulted or eStop state, closed when inCycle resumes. PLC bits: faulted (3), eStop (5), inCycle (4)">Downtime</option>
+      <option value="operator_entry" title="Time from clearToEnter to light curtain break (lcBroken). PLC bits: clearToEnter (6), lcBroken (7)">Operator Entry</option>
+      <option value="operator_overcycle" title="Operator load time exceeding configured ManTime. PLC bits: clearToEnter (6), inCycle (4)">Operator Overcycle</option>
+      <option value="machine_overcycle" title="Machine cycle time exceeding configured MachineTime. PLC bit: inCycle (4)">Machine Overcycle</option>
+      <option value="starved_blocked" title="Time starved or blocked during machine overcycle. PLC bits: starved (9), blocked (10), inCycle (4)">Starved / Blocked</option>
+      <option value="red_rabbit" title="Total duration of red rabbit (quality hold) events. PLC bit: redRabbit (11)">Red Rabbit</option>
+      <option value="andon_response" title="Duration of each andon call type. PLC bits: prodAndon (14) through itAndon (23)">Andon Response</option>
+      <option value="tool_change" title="Total duration of tool change events. PLC bit: toolChangeActive (25)">Tool Change</option>
+      <option value="oee" title="Overall Equipment Effectiveness = Availability x Performance x Quality. Composite of downtime, counts, and scrap data">OEE</option>
+    </optgroup>
+    <optgroup label="Trend Reports">
+      <option value="production_trend" title="Daily production counts over time, grouped by shift and style">Production Trend</option>
+      <option value="tool_change_trend" title="Daily tool change duration trend. PLC bit: toolChangeActive (25)">Tool Change Trend</option>
+      <option value="fault_trend" title="Daily fault/eStop duration trend. PLC bits: faulted (3), eStop (5)">Fault / EStop Trend</option>
+    </optgroup>
+    <optgroup label="Summary">
+      <option value="shift_summary" title="Aggregated shift metrics: OEE, counts, downtime, and scrap for a date range">Shift Summary</option>
+    </optgroup>
+  </select>
+
+  <span id="range-controls" class="hidden" style="display:inline-flex;align-items:center;gap:8px">
+    <label>From</label>
+    <input type="date" id="from-input" title="Start date of the report range">
+  </span>
+
+  <span id="daily-controls">
+    <label id="date-label">Date</label>
+    <div class="date-nav">
+      <button id="date-prev" title="Previous day">&larr;</button>
+      <input type="date" id="date-input" value="{{.Date}}" title="Report date">
+      <button id="date-next" title="Next day">&rarr;</button>
+    </div>
+  </span>
+
+  <span id="trend-controls" class="hidden">
+    <label>Period</label>
+    <select id="period-select" title="Time range for trend analysis">
+      <option value="30">30 Days</option>
+      <option value="60">60 Days</option>
+      <option value="90">90 Days</option>
+      <option value="180">180 Days</option>
+      <option value="all">All Time</option>
+    </select>
+  </span>
+
+  <label>Operation</label>
+  <select id="shape-select" title="Filter by a specific operation (machine/process)"><option value="">All</option></select>
+
+  <label>Shift</label>
+  <select id="shift-select" title="Filter by a specific shift"><option value="">All</option></select>
+
+  <span class="export-buttons">
+    <button id="export-csv" title="Download report data as a CSV file">CSV</button>
+    <button id="export-xlsx" title="Download report data as an Excel file">XLSX</button>
+    <button id="recompute-btn" class="recompute hidden" title="Recompute shift summary for date range">Recompute</button>
+  </span>
+</div>
+
+<div class="reports-content">
+  <div id="report-table-container">
+    <div class="no-data">Loading...</div>
+  </div>
+  <div id="trend-chart-wrap">
+    <canvas id="trend-chart"></canvas>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="/static/utils.js"></script>
+<script>
+(function() {
+  // --- DOM Refs ---
+  const screenSel = document.getElementById('screen-select');
+  const reportSel = document.getElementById('report-select');
+  const dateInput = document.getElementById('date-input');
+  const fromInput = document.getElementById('from-input');
+  const dateLabel = document.getElementById('date-label');
+  const shapeSel  = document.getElementById('shape-select');
+  const shiftSel  = document.getElementById('shift-select');
+  const periodSel = document.getElementById('period-select');
+  const container = document.getElementById('report-table-container');
+  const chartWrap = document.getElementById('trend-chart-wrap');
+  const chartCanvas = document.getElementById('trend-chart');
+  const prevBtn   = document.getElementById('date-prev');
+  const nextBtn   = document.getElementById('date-next');
+  const dailyCtrl = document.getElementById('daily-controls');
+  const trendCtrl = document.getElementById('trend-controls');
+  const rangeCtrl = document.getElementById('range-controls');
+  const recomputeBtn = document.getElementById('recompute-btn');
+
+  const isAdmin = {{if .LoggedIn}}true{{else}}false{{end}};
+
+  // --- Date Defaults ---
+  if (!dateInput.value) {
+    dateInput.value = localDateStr();
+  }
+  {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    fromInput.value = localDateStr(d);
+  }
+
+  // --- State ---
+  let pollTimer = null;
+  let lastShapeKeys = '';
+  let chartInstance = null;
+
+  const TREND_REPORTS = ['production_trend', 'tool_change_trend', 'fault_trend'];
+  const TOTAL_REPORTS = ['red_rabbit', 'tool_change'];
+
+  // --- Predicates ---
+  function isTrend() {
+    return TREND_REPORTS.includes(reportSel.value);
+  }
+
+  function isShiftSummary() {
+    return reportSel.value === 'shift_summary';
+  }
+
+  // --- Shared Helpers ---
+
+  // Ensure from <= to; auto-swap if inverted
+  function normalizeDateRange() {
+    if (fromInput.value > dateInput.value) {
+      const tmp = fromInput.value;
+      fromInput.value = dateInput.value;
+      dateInput.value = tmp;
+    }
+  }
+
+  // Build URLSearchParams for shift-summary endpoints (fetch + export)
+  function buildSummaryParams() {
+    normalizeDateRange();
+    const params = new URLSearchParams({
+      screen: screenSel.value,
+      from: fromInput.value,
+      to: dateInput.value
+    });
+    if (shapeSel.value) params.set('shape', shapeSel.value);
+    if (shiftSel.value) params.set('shift', shiftSel.value);
+    return params;
+  }
+
+  // --- Formatters ---
+
+  function fmtDuration(sec) {
+    if (sec == null || sec <= 0) return '-';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.round(sec % 60);
+    if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    if (m > 0) return m + ':' + String(s).padStart(2,'0');
+    return s + 's';
+  }
+
+  function fmtPct(v) {
+    if (v == null) return '-';
+    return (v * 100).toFixed(1) + '%';
+  }
+
+  function oeeClass(v) {
+    if (v == null) return '';
+    return v >= 0.85 ? 'oee-good' : v >= 0.6 ? 'oee-warn' : 'oee-bad';
+  }
+
+  // --- Control Visibility ---
+
+  function updateControlVisibility() {
+    if (isShiftSummary()) {
+      rangeCtrl.classList.remove('hidden');
+      dailyCtrl.classList.remove('hidden');
+      trendCtrl.classList.add('hidden');
+      dateLabel.textContent = 'To';
+      dateInput.title = 'End date of the report range';
+      prevBtn.title = 'Move end date back one day';
+      nextBtn.title = 'Move end date forward one day';
+      if (isAdmin) recomputeBtn.classList.remove('hidden');
+      else recomputeBtn.classList.add('hidden');
+    } else if (isTrend()) {
+      rangeCtrl.classList.add('hidden');
+      dailyCtrl.classList.add('hidden');
+      trendCtrl.classList.remove('hidden');
+      recomputeBtn.classList.add('hidden');
+    } else {
+      rangeCtrl.classList.add('hidden');
+      dailyCtrl.classList.remove('hidden');
+      trendCtrl.classList.add('hidden');
+      dateLabel.textContent = 'Date';
+      dateInput.title = 'Report date';
+      prevBtn.title = 'Previous day';
+      nextBtn.title = 'Next day';
+      recomputeBtn.classList.add('hidden');
+    }
+  }
+
+  // --- Data Fetching ---
+
+  function showLoading() {
+    container.innerHTML = '<div class="loading-indicator">Loading report\u2026</div>';
+    chartWrap.style.display = 'none';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  }
+
+  function fetchReport(isPoll) {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    updateControlVisibility();
+    if (!isPoll) showLoading();
+    const rt = reportSel.value;
+
+    if (isShiftSummary()) {
+      const params = buildSummaryParams();
+
+      fetch('/api/shift-summary?' + params)
+        .then(r => r.json())
+        .then(data => {
+          renderShiftSummary(data || []);
+          updateFiltersFromSummary(data || []);
+        })
+        .catch(() => {
+          container.innerHTML = '<div class="no-data">Error loading data</div>';
+        });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      screen: screenSel.value,
+      report_type: rt
+    });
+    if (isTrend()) {
+      params.set('days', periodSel.value);
+    } else {
+      params.set('date', dateInput.value);
+    }
+    if (shapeSel.value) params.set('shape', shapeSel.value);
+    if (shiftSel.value) params.set('shift', shiftSel.value);
+
+    fetch('/api/reports?' + params)
+      .then(r => r.json())
+      .then(data => {
+        if (isTrend()) {
+          container.innerHTML = '';
+          chartWrap.style.display = 'block';
+          renderTrend(data);
+        } else {
+          chartWrap.style.display = 'none';
+          if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+          if (rt === 'andon_response') renderAndonTable(data);
+          else if (rt === 'oee') renderOEETable(data);
+          else if (TOTAL_REPORTS.includes(rt)) renderTotalTable(data);
+          else renderHourlyTable(data);
+        }
+        updateFilters(data);
+        schedulePoll();
+      })
+      .catch(() => {
+        container.innerHTML = '<div class="no-data">Error loading data</div>';
+        chartWrap.style.display = 'none';
+        schedulePoll();
+      });
+  }
+
+  function schedulePoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    if (isTrend() || isShiftSummary()) return;
+    const today = localDateStr();
+    if (dateInput.value === today) {
+      pollTimer = setTimeout(() => fetchReport(true), 5000);
+    }
+  }
+
+  // --- Filter Management ---
+
+  function populateShapeDropdown(entries) {
+    const key = entries.map(e => e[0] + ':' + e[1]).join(',');
+    if (key === lastShapeKeys) return;
+    lastShapeKeys = key;
+    const cur = shapeSel.value;
+    shapeSel.innerHTML = '<option value="">All</option>';
+    for (const [id, name] of entries) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = name;
+      if (id === cur) opt.selected = true;
+      shapeSel.appendChild(opt);
+    }
+  }
+
+  function updateFilters(data) {
+    const ops = data.operations || [];
+    populateShapeDropdown(ops.map(o => [o.shape_id, o.name]));
+  }
+
+  function updateFiltersFromSummary(rows) {
+    const seen = new Map();
+    for (const r of rows) {
+      if (r.shape_id && !seen.has(r.shape_id)) {
+        seen.set(r.shape_id, r.shape_name || r.shape_id);
+      }
+    }
+    populateShapeDropdown(Array.from(seen.entries()));
+  }
+
+  // --- Renderers ---
+
+  function renderShiftSummary(rows) {
+    if (rows.length === 0) {
+      container.innerHTML = '<div class="no-data">No shift summary data for this range.</div>';
+      return;
+    }
+
+    const hasStyle = rows.some(r => r.style_name);
+
+    let html = '<table class="reports-table">';
+    html += '<thead><tr>';
+    html += '<th style="text-align:left">Date</th>';
+    html += '<th style="text-align:left">Operation</th>';
+    html += '<th style="text-align:left">Shift</th>';
+    if (hasStyle) html += '<th style="text-align:left">Style</th>';
+    html += '<th title="Total parts produced">Actual</th><th title="Target count based on takt time and scheduled minutes">Planned</th>';
+    html += '<th title="Availability = (Scheduled Time − Downtime) / Scheduled Time">Avail</th>';
+    html += '<th title="Performance = Actual / (Run Time / Takt Time)">Perf</th>';
+    html += '<th title="Quality = (Actual − Scrapped) / Actual">Quality</th>';
+    html += '<th title="OEE = Availability × Performance × Quality">OEE</th>';
+    html += '<th title="Total downtime duration (faulted or eStop)">Downtime</th>';
+    html += '<th title="Parts scrapped (partKicked count)">Scrapped</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const r of rows) {
+      html += '<tr>';
+      html += '<td style="text-align:left">' + esc(r.count_date) + '</td>';
+      html += '<td style="text-align:left">' + esc(r.shape_name) + '</td>';
+      html += '<td style="text-align:left">' + esc(r.shift_name) + '</td>';
+      if (hasStyle) html += '<td style="text-align:left">' + esc(r.style_name) + '</td>';
+      html += '<td>' + (r.actual || 0) + '</td>';
+      html += '<td>' + (r.planned || 0) + '</td>';
+      html += '<td>' + fmtPct(r.availability) + '</td>';
+      html += '<td>' + fmtPct(r.performance) + '</td>';
+      html += '<td>' + fmtPct(r.quality) + '</td>';
+      html += '<td class="' + oeeClass(r.oee) + '"><b>' + fmtPct(r.oee) + '</b></td>';
+      html += '<td>' + fmtDuration(r.downtime_seconds) + '</td>';
+      html += '<td>' + (r.scrap_count || 0) + '</td>';
+      html += '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  function renderHourlyTable(data) {
+    const ops = data.operations || [];
+    const allHours = data.hours || [];
+
+    if (ops.length === 0) {
+      container.innerHTML = '<div class="no-data">No data for this report.</div>';
+      return;
+    }
+
+    const numCols = 2 + allHours.length + 1;
+
+    let html = '<table class="reports-table">';
+    html += '<thead><tr>';
+    html += '<th style="text-align:left">Shift</th>';
+    for (const col of allHours) {
+      html += '<th><b>' + col.index + '</b><br><small>' + col.label + '</small></th>';
+    }
+    html += '<th title="Sum of all hours for this shift">Total</th>';
+    if (data.report_type === 'downtime') html += '<th title="Number of distinct fault/eStop events">Stoppages</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const op of ops) {
+      html += '<tr class="op-header"><td colspan="' + (numCols + (data.report_type === 'downtime' ? 1 : 0)) + '">' + esc(op.name) + '</td></tr>';
+
+      for (const shift of op.shifts || []) {
+        const hourMap = {};
+        for (const h of shift.hours || []) hourMap[h.shift_hour] = h;
+
+        html += '<tr class="shift-row">';
+        html += '<td style="text-align:left">' + esc(shift.name) + '<br><small style="font-weight:400;color:#888">' + esc(shift.time_range) + '</small></td>';
+        for (const col of allHours) {
+          const cell = hourMap[col.shift_hour];
+          html += '<td>' + (cell ? fmtDuration(cell.seconds) : '-') + '</td>';
+        }
+        html += '<td><b>' + fmtDuration(shift.total_seconds) + '</b></td>';
+        if (data.report_type === 'downtime') html += '<td>' + (shift.total_count || '-') + '</td>';
+        html += '</tr>';
+      }
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  function renderTotalTable(data) {
+    const ops = data.operations || [];
+    if (ops.length === 0) {
+      container.innerHTML = '<div class="no-data">No data for this report.</div>';
+      return;
+    }
+
+    let html = '<table class="reports-table">';
+    html += '<thead><tr><th style="text-align:left">Operation</th><th style="text-align:left">Shift</th><th>Total Duration</th>';
+    if (data.report_type === 'tool_change') html += '<th>Count</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const op of ops) {
+      for (let i = 0; i < (op.shifts || []).length; i++) {
+        const shift = op.shifts[i];
+        html += '<tr>';
+        if (i === 0) {
+          html += '<td style="text-align:left;font-weight:700" rowspan="' + op.shifts.length + '">' + esc(op.name) + '</td>';
+        }
+        html += '<td style="text-align:left">' + esc(shift.name) + '</td>';
+        html += '<td>' + fmtDuration(shift.total_seconds) + '</td>';
+        if (data.report_type === 'tool_change') html += '<td>' + (shift.total_count || '-') + '</td>';
+        html += '</tr>';
+      }
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  function renderAndonTable(data) {
+    const ops = data.operations || [];
+    if (ops.length === 0) {
+      container.innerHTML = '<div class="no-data">No data for this report.</div>';
+      return;
+    }
+
+    let html = '<table class="reports-table">';
+    html += '<thead><tr><th style="text-align:left">Operation / Andon Type</th><th style="text-align:left">Shift</th><th>Duration</th></tr></thead><tbody>';
+
+    for (const op of ops) {
+      html += '<tr class="op-header"><td colspan="3">' + esc(op.name) + '</td></tr>';
+
+      for (const shift of op.shifts || []) {
+        html += '<tr class="shift-row">';
+        html += '<td style="text-align:left">' + esc(shift.name) + ' <small style="font-weight:400;color:#888">' + esc(shift.time_range) + '</small></td>';
+        html += '<td></td>';
+        html += '<td><b>' + fmtDuration(shift.total_seconds) + '</b></td>';
+        html += '</tr>';
+
+        for (const a of shift.andons || []) {
+          html += '<tr class="andon-row">';
+          html += '<td>' + esc(a.label) + '</td>';
+          html += '<td></td>';
+          html += '<td>' + fmtDuration(a.seconds) + '</td>';
+          html += '</tr>';
+        }
+      }
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  function renderOEETable(data) {
+    const ops = data.operations || [];
+    if (ops.length === 0) {
+      container.innerHTML = '<div class="no-data">No data for this report.</div>';
+      return;
+    }
+
+    let html = '<table class="reports-table">';
+    html += '<thead><tr>';
+    html += '<th style="text-align:left">Operation</th>';
+    html += '<th style="text-align:left">Shift</th>';
+    html += '<th title="(Scheduled Time − Downtime) / Scheduled Time">Availability</th>';
+    html += '<th title="Actual / (Run Time / Takt Time)">Performance</th>';
+    html += '<th title="(Actual − Scrapped) / Actual">Quality</th>';
+    html += '<th title="Availability × Performance × Quality">OEE</th>';
+    html += '<th title="Total downtime duration (faulted or eStop)">Downtime</th>';
+    html += '<th title="Total parts produced">Actual</th>';
+    html += '<th title="Target count based on takt time and scheduled minutes">Planned</th>';
+    html += '<th title="Parts scrapped (partKicked count)">Scrapped</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const op of ops) {
+      for (let i = 0; i < (op.shifts || []).length; i++) {
+        const s = op.shifts[i];
+        html += '<tr>';
+        if (i === 0) {
+          html += '<td style="text-align:left;font-weight:700" rowspan="' + op.shifts.length + '">' + esc(op.name) + '</td>';
+        }
+        html += '<td style="text-align:left">' + esc(s.name) + '</td>';
+        html += '<td>' + fmtPct(s.availability) + '</td>';
+        html += '<td>' + fmtPct(s.performance) + '</td>';
+        html += '<td>' + fmtPct(s.quality) + '</td>';
+        html += '<td class="' + oeeClass(s.oee) + '"><b>' + fmtPct(s.oee) + '</b></td>';
+        html += '<td>' + fmtDuration(s.downtime_seconds) + '</td>';
+        html += '<td>' + (s.actual || 0) + '</td>';
+        html += '<td>' + (s.planned || 0) + '</td>';
+        html += '<td>' + (s.scrapped || 0) + '</td>';
+        html += '</tr>';
+      }
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  // --- Trend Chart ---
+
+  const SHIFT_COLORS = [
+    'rgb(54, 162, 235)',
+    'rgb(255, 99, 132)',
+    'rgb(75, 192, 192)',
+    'rgb(255, 159, 64)',
+    'rgb(153, 102, 255)',
+    'rgb(255, 205, 86)',
+  ];
+
+  function renderTrend(data) {
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    const labels = data.labels || [];
+    const datasets = data.datasets || [];
+
+    if (labels.length === 0 || datasets.length === 0) {
+      container.innerHTML = '<div class="no-data">No trend data available.</div>';
+      chartWrap.style.display = 'none';
+      return;
+    }
+
+    const chartDatasets = datasets.map((ds, i) => ({
+      label: ds.style ? ds.shift + ' - ' + ds.style : ds.shift,
+      data: ds.data,
+      borderColor: SHIFT_COLORS[i % SHIFT_COLORS.length],
+      backgroundColor: SHIFT_COLORS[i % SHIFT_COLORS.length],
+      tension: 0.3,
+      fill: false,
+    }));
+
+    const isProduction = data.report_type === 'production_trend';
+
+    chartInstance = new Chart(chartCanvas, {
+      type: 'line',
+      data: { labels, datasets: chartDatasets },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: reportSel.options[reportSel.selectedIndex].text,
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                if (isProduction) return ctx.dataset.label + ': ' + ctx.parsed.y + ' parts';
+                return ctx.dataset.label + ': ' + fmtDuration(ctx.parsed.y);
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: isProduction ? {} : {
+              callback: function(v) { return fmtDuration(v); }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // --- Event Listeners ---
+  screenSel.addEventListener('change', function() { lastShapeKeys = ''; fetchReport(); });
+  reportSel.addEventListener('change', function() { lastShapeKeys = ''; fetchReport(); });
+  dateInput.addEventListener('change', fetchReport);
+  fromInput.addEventListener('change', fetchReport);
+  shapeSel.addEventListener('change', fetchReport);
+  shiftSel.addEventListener('change', fetchReport);
+  periodSel.addEventListener('change', fetchReport);
+
+  prevBtn.addEventListener('click', function() {
+    const d = parseLocalDate(dateInput.value);
+    d.setDate(d.getDate() - 1);
+    dateInput.value = localDateStr(d);
+    fetchReport();
+  });
+  nextBtn.addEventListener('click', function() {
+    const d = parseLocalDate(dateInput.value);
+    d.setDate(d.getDate() + 1);
+    dateInput.value = localDateStr(d);
+    fetchReport();
+  });
+
+  // Populate shift filter from settings
+  fetch('/api/settings')
+    .then(r => { if (r.ok) return r.json(); return null; })
+    .then(settings => {
+      if (!settings || !settings.shifts) return;
+      for (const s of settings.shifts) {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        opt.textContent = s.name;
+        shiftSel.appendChild(opt);
+      }
+    })
+    .catch(() => {});
+
+  // --- Export ---
+  function buildReportExportURL(ext) {
+    if (isShiftSummary()) {
+      return '/api/export/shift-summary.' + ext + '?' + buildSummaryParams();
+    }
+    const params = new URLSearchParams({
+      screen: screenSel.value,
+      report_type: reportSel.value,
+      from: dateInput.value,
+      to: dateInput.value
+    });
+    if (shapeSel.value) params.set('shape', shapeSel.value);
+    if (shiftSel.value) params.set('shift', shiftSel.value);
+    return '/api/export/reports.' + ext + '?' + params;
+  }
+  document.getElementById('export-csv').addEventListener('click', () => {
+    window.location.href = buildReportExportURL('csv');
+  });
+  document.getElementById('export-xlsx').addEventListener('click', () => {
+    window.location.href = buildReportExportURL('xlsx');
+  });
+
+  // --- Recompute ---
+  recomputeBtn.addEventListener('click', async () => {
+    recomputeBtn.disabled = true;
+    recomputeBtn.textContent = 'Computing...';
+    normalizeDateRange();
+    try {
+      const resp = await fetch('/api/shift-summary/recompute', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          screen: screenSel.value,
+          from: fromInput.value,
+          to: dateInput.value
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        recomputeBtn.textContent = data.shifts_computed + ' shifts computed';
+        setTimeout(() => { recomputeBtn.textContent = 'Recompute'; recomputeBtn.disabled = false; }, 3000);
+        fetchReport();
+      } else {
+        recomputeBtn.textContent = 'Error: ' + resp.status;
+        setTimeout(() => { recomputeBtn.textContent = 'Recompute'; recomputeBtn.disabled = false; }, 3000);
+      }
+    } catch {
+      recomputeBtn.textContent = 'Error';
+      setTimeout(() => { recomputeBtn.textContent = 'Recompute'; recomputeBtn.disabled = false; }, 3000);
+    }
+  });
+
+  // --- Init ---
+  fetchReport();
+})();
+</script>
+
+</body>
+</html>

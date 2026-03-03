@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Work Orders</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .content {
+    max-width: 700px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    color: #777;
+    margin-bottom: 4px;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .field textarea { resize: vertical; min-height: 80px; }
+
+  .other-input { margin-top: 6px; display: none; }
+  .other-input.visible { display: block; }
+
+  /* Priority pills */
+  .priority-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .priority-pill {
+    padding: 7px 18px;
+    border-radius: 20px;
+    border: 2px solid #ccc;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: #555;
+  }
+  .priority-pill:hover { border-color: #999; }
+  .priority-pill.selected { color: #fff; }
+  .priority-pill[data-value="low"].selected { background: #66bb6a; border-color: #66bb6a; }
+  .priority-pill[data-value="normal"].selected { background: #4a90d9; border-color: #4a90d9; }
+  .priority-pill[data-value="high"].selected { background: #ffa726; border-color: #ffa726; }
+  .priority-pill[data-value="emergency"].selected { background: #e53935; border-color: #e53935; }
+
+  /* Work type tiles */
+  .type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .type-tile {
+    padding: 12px 8px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: #555;
+    background: #fff;
+  }
+  .type-tile:hover { border-color: #999; }
+  .type-tile.selected { border-color: #4a90d9; background: #e8f0fe; color: #1a56a0; }
+  .type-tile .type-icon { font-size: 22px; margin-bottom: 4px; }
+
+  /* Messages */
+  .msg { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; display: none; }
+  .msg-ok { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+  .msg-err { background: #fde; color: #c62828; border: 1px solid #f8bbd0; }
+
+  .wo-number {
+    font-family: monospace;
+    font-size: 15px;
+    font-weight: 700;
+    background: #f5f5f5;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .recent-section {
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+  }
+  .recent-section .hint-icon { font-size: 28px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+{{template "nav-bar" .}}
+
+<div class="content">
+  <div class="card">
+    <h2>Submit Work Order</h2>
+    <div id="wo-msg" class="msg"></div>
+
+    <div class="field">
+      <label>Equipment / Machine</label>
+      <select id="wo-equipment">
+        <option value="">Select equipment...</option>
+      </select>
+      <input type="text" id="wo-equipment-other" class="other-input" placeholder="Describe equipment...">
+    </div>
+
+    <div class="field">
+      <label>Priority</label>
+      <div class="priority-row">
+        <button type="button" class="priority-pill" data-value="low">Low</button>
+        <button type="button" class="priority-pill selected" data-value="normal">Normal</button>
+        <button type="button" class="priority-pill" data-value="high">High</button>
+        <button type="button" class="priority-pill" data-value="emergency">Emergency</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Work Type</label>
+      <div class="type-grid">
+        <div class="type-tile" data-value="mechanical"><div class="type-icon">&#9881;</div>Mechanical</div>
+        <div class="type-tile" data-value="electrical"><div class="type-icon">&#9889;</div>Electrical</div>
+        <div class="type-tile" data-value="pneumatic"><div class="type-icon">&#9729;</div>Pneumatic</div>
+        <div class="type-tile" data-value="hydraulic"><div class="type-icon">&#9675;</div>Hydraulic</div>
+        <div class="type-tile" data-value="controls"><div class="type-icon">&#9000;</div>Controls</div>
+        <div class="type-tile" data-value="other"><div class="type-icon">&#8943;</div>Other</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Description</label>
+      <textarea id="wo-description" placeholder="Describe the issue or work needed..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>Requested By</label>
+      <input type="text" id="wo-requested-by" placeholder="Your name">
+    </div>
+
+    <button class="btn btn-primary" id="wo-submit" style="width:100%;padding:10px">Submit Work Order</button>
+  </div>
+
+  <div class="card">
+    <h2>Recent Submissions</h2>
+    <div class="recent-section">
+      <div class="hint-icon">&#128279;</div>
+      <p>Submitted work orders will appear here once E-Maintenance integration is connected.</p>
+      <p style="margin-top:6px;font-size:12px">Configure the E-Maintenance server in Settings to enable real-time tracking.</p>
+    </div>
+  </div>
+</div>
+
+<script src="/static/utils.js"></script>
+<script>
+const equipment = {{.EquipmentJSON}};
+const select = document.getElementById('wo-equipment');
+const otherInput = document.getElementById('wo-equipment-other');
+
+equipment.forEach(name => {
+  const opt = document.createElement('option');
+  opt.value = name;
+  opt.textContent = name;
+  select.appendChild(opt);
+});
+const otherOpt = document.createElement('option');
+otherOpt.value = '__other__';
+otherOpt.textContent = 'Other...';
+select.appendChild(otherOpt);
+
+select.addEventListener('change', () => {
+  otherInput.classList.toggle('visible', select.value === '__other__');
+  if (select.value === '__other__') otherInput.focus();
+});
+
+// Priority pills
+let selectedPriority = 'normal';
+document.querySelectorAll('.priority-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.priority-pill').forEach(p => p.classList.remove('selected'));
+    pill.classList.add('selected');
+    selectedPriority = pill.dataset.value;
+  });
+});
+
+// Work type tiles
+let selectedType = '';
+document.querySelectorAll('.type-tile').forEach(tile => {
+  tile.addEventListener('click', () => {
+    document.querySelectorAll('.type-tile').forEach(t => t.classList.remove('selected'));
+    tile.classList.add('selected');
+    selectedType = tile.dataset.value;
+  });
+});
+
+// Restore requested_by from localStorage
+const reqByInput = document.getElementById('wo-requested-by');
+reqByInput.value = localStorage.getItem('wo_requested_by') || '';
+
+// Submit
+document.getElementById('wo-submit').addEventListener('click', async () => {
+  const msg = document.getElementById('wo-msg');
+  msg.style.display = 'none';
+
+  let equipmentVal = select.value;
+  if (equipmentVal === '__other__') equipmentVal = otherInput.value.trim();
+
+  const description = document.getElementById('wo-description').value.trim();
+  const requestedBy = reqByInput.value.trim();
+
+  if (!equipmentVal) {
+    msg.className = 'msg msg-err'; msg.textContent = 'Please select or enter equipment.'; msg.style.display = 'block';
+    return;
+  }
+  if (!description) {
+    msg.className = 'msg msg-err'; msg.textContent = 'Please enter a description.'; msg.style.display = 'block';
+    return;
+  }
+  if (!requestedBy) {
+    msg.className = 'msg msg-err'; msg.textContent = 'Please enter your name.'; msg.style.display = 'block';
+    return;
+  }
+
+  // Persist requested_by
+  localStorage.setItem('wo_requested_by', requestedBy);
+
+  const btn = document.getElementById('wo-submit');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    const resp = await fetch('/api/workorders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        equipment: equipmentVal,
+        priority: selectedPriority,
+        work_type: selectedType,
+        description: description,
+        requested_by: requestedBy,
+      }),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      msg.className = 'msg msg-ok';
+      msg.innerHTML = 'Work order <span class="wo-number">' + esc(data.wo_number) + '</span> submitted successfully.';
+      msg.style.display = 'block';
+      // Reset form
+      document.getElementById('wo-description').value = '';
+      select.value = '';
+      otherInput.value = '';
+      otherInput.classList.remove('visible');
+      selectedType = '';
+      document.querySelectorAll('.type-tile').forEach(t => t.classList.remove('selected'));
+      selectedPriority = 'normal';
+      document.querySelectorAll('.priority-pill').forEach(p => p.classList.remove('selected'));
+      document.querySelector('.priority-pill[data-value="normal"]').classList.add('selected');
+    } else {
+      msg.className = 'msg msg-err';
+      msg.textContent = data.error || 'Failed to submit work order.';
+      msg.style.display = 'block';
+    }
+  } catch (e) {
+    msg.className = 'msg msg-err';
+    msg.textContent = 'Network error. Please try again.';
+    msg.style.display = 'block';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Submit Work Order';
+});
+</script>
+</body>
+</html>

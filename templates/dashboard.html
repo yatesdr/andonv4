@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andon - Dashboard</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  /* Global controls */
+  .global-controls {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .global-controls label {
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .global-controls input[type="text"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    width: 200px;
+  }
+  .toggle-btn {
+    padding: 8px 18px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #f7f8fa;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .toggle-btn:hover { background: #eee; }
+  .toggle-btn.active {
+    background: #e53935;
+    color: #fff;
+    border-color: #e53935;
+  }
+  .andon-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    cursor: pointer;
+    user-select: none;
+  }
+  .andon-switch .andon-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .andon-switch.on .andon-label { color: #2e7d32; }
+  .andon-track {
+    width: 52px;
+    height: 28px;
+    border-radius: 14px;
+    background: #ccc;
+    position: relative;
+    transition: background 0.25s;
+  }
+  .andon-switch.on .andon-track {
+    background: #00dd00;
+    box-shadow: 0 0 10px rgba(0, 220, 0, 0.5), 0 0 24px rgba(0, 220, 0, 0.3);
+  }
+  .andon-knob {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: left 0.25s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .andon-switch.on .andon-knob { left: 27px; }
+
+  /* Content */
+  .content {
+    padding: 24px 32px;
+  }
+  .content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .content-header h2 {
+    font-size: 18px;
+    color: #555;
+  }
+  /* Screen grid */
+  .screen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 300px));
+    gap: 16px;
+  }
+  .screen-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+  .screen-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  .screen-preview {
+    display: block;
+    background: #eee;
+    position: relative;
+    cursor: pointer;
+  }
+  .screen-preview canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .screen-info {
+    padding: 10px 12px;
+  }
+  .screen-info h3 {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .screen-info .slug {
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 6px;
+  }
+  .screen-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .screen-actions a, .screen-actions button {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: #f7f8fa;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #333;
+  }
+  .screen-actions a:hover, .screen-actions button:hover { background: #eef2ff; border-color: #4a90d9; }
+  .screen-actions .overlay-btn.active { background: #e53935; color: #fff; border-color: #e53935; }
+  .admin-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    justify-content: center;
+  }
+  .admin-actions a, .admin-actions button {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #e0a030;
+    background: #fef3e0;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #8a6000;
+    font-weight: 600;
+  }
+  .admin-actions a:hover, .admin-actions button:hover { background: #fde8c0; border-color: #d48e00; }
+  .admin-actions .delete-btn { border-color: #e8a0a0; background: #fdedef; color: #c62828; }
+  .admin-actions .delete-btn:hover { background: #fde; border-color: #e53935; color: #e53935; }
+
+  .screen-active-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 6px 10px;
+    background: #f7f8fa;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .screen-active-bar .active-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 6px;
+  }
+  .screen-active-bar.on .active-label { color: #2e7d32; }
+  .screen-active-track {
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: #ccc;
+    position: relative;
+    transition: background 0.25s;
+    cursor: pointer;
+  }
+  .screen-active-bar.on .screen-active-track {
+    background: #00dd00;
+    box-shadow: 0 0 6px rgba(0, 220, 0, 0.4);
+  }
+  .screen-active-track .knob {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: left 0.25s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .screen-active-bar.on .screen-active-track .knob { left: 18px; }
+
+  .auto-start-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: auto;
+    cursor: pointer;
+  }
+  .auto-start-toggle .auto-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .auto-start-toggle.on .auto-label { color: #1565c0; }
+  .auto-start-track {
+    width: 28px;
+    height: 16px;
+    border-radius: 8px;
+    background: #ccc;
+    position: relative;
+    transition: background 0.25s;
+  }
+  .auto-start-toggle.on .auto-start-track {
+    background: #42a5f5;
+  }
+  .auto-start-track .knob {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: left 0.25s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .auto-start-toggle.on .auto-start-track .knob { left: 14px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+    font-size: 16px;
+  }
+
+  .overlay-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .overlay-opt {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: #f7f8fa;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .overlay-opt:hover { background: #eef2ff; border-color: #4a90d9; }
+  .overlay-opt.selected { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+
+  /* Event log size warning toast */
+  .eventlog-toast {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #fff3e0;
+    border: 1px solid #e0a030;
+    border-radius: 8px;
+    padding: 14px 18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 9000;
+    max-width: 340px;
+    font-size: 13px;
+    color: #6d4c00;
+  }
+  .eventlog-toast.visible { display: flex; align-items: flex-start; gap: 10px; }
+  .eventlog-toast .toast-msg { flex: 1; }
+  .eventlog-toast .toast-msg strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  .eventlog-toast .toast-dismiss {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #6d4c00;
+    line-height: 1;
+    padding: 0;
+  }
+</style>
+</head>
+<body>
+
+{{template "nav-bar" .}}
+
+<div class="global-controls">
+  <button class="toggle-btn {{if .Global.MuteActive}}active{{end}}" id="mute-toggle">
+    {{if .Global.MuteActive}}UNDO BLACKOUT{{else}}Blackout{{end}}
+  </button>
+  <button class="toggle-btn {{if .Global.OverlayActive}}active{{end}}" id="overlay-btn">
+    {{if .Global.OverlayActive}}Status: {{.Global.OverlayText}}{{else}}Set Status{{end}}
+  </button>
+  <div class="andon-switch {{if .Global.AndonActive}}on{{end}}" id="andon-toggle" title="Bulk start or stop all screens at once. Individual screens can still be toggled separately. Starting up to 30 minutes before a shift captures early production.">
+    <span class="andon-label">{{if .Global.AndonActive}}Active{{else}}Off{{end}}</span>
+    <div class="andon-track"><div class="andon-knob"></div></div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="content-header">
+    <h2>Screens</h2>
+    {{if .LoggedIn}}<button class="btn btn-primary" id="add-screen-btn">+ Add Screen</button>{{end}}
+  </div>
+
+  {{if .Screens}}
+  <div class="screen-grid" id="screen-grid">
+    {{range .Screens}}
+    <div class="screen-card" data-id="{{.ID}}" data-slug="{{.Slug}}">
+      <div class="screen-active-bar {{if .Active}}on{{end}}" data-id="{{.ID}}">
+        <div class="auto-start-toggle {{if .AutoStart}}on{{end}}" data-id="{{.ID}}" title="Automatically activate this screen when a shift begins and deactivate it when the shift ends, based on the shift schedule in Settings.">
+          <span class="auto-label">Auto-Start</span>
+          <div class="auto-start-track"><div class="knob"></div></div>
+        </div>
+        <span class="active-label">{{if .Active}}Active{{else}}Off{{end}}</span>
+        <div class="screen-active-track"><div class="knob"></div></div>
+      </div>
+      <a class="screen-preview" href="/screens/{{.Slug}}" onclick="window.open(this.href,'andon_{{.Slug}}','width=1920,height=1080');return false;">
+        <canvas width="1920" height="1080" data-layout='{{.Layout}}'></canvas>
+      </a>
+      <div class="screen-info">
+        <div>
+          <h3>{{.Name}}</h3>
+          <div class="slug">/screens/{{.Slug}}</div>
+        </div>
+        <div class="screen-actions">
+          <button class="overlay-btn {{if eq .Overlay "BREAK"}}active{{end}}" data-id="{{.ID}}" data-text="BREAK">Break</button>
+          <button class="overlay-btn {{if eq .Overlay "CHANGEOVER"}}active{{end}}" data-id="{{.ID}}" data-text="CHANGEOVER">Changeover</button>
+        </div>
+        {{if $.LoggedIn}}<div class="admin-actions">
+          <a href="/designer?screen={{.ID}}">Designer</a>
+          <a href="/configure/{{.ID}}">Targets</a>
+          <button class="delete-btn" data-id="{{.ID}}">Delete</button>
+        </div>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <div class="empty-state">
+    No screens yet. Click "Add Screen" to create one.
+  </div>
+  {{end}}
+</div>
+
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <h3>New Screen</h3>
+    <input type="text" id="screen-name-input" placeholder="Screen name (e.g. Assembly Line 1)" autofocus>
+    <div class="modal-buttons">
+      <button id="add-cancel">Cancel</button>
+      <button id="add-create" class="primary">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="overlay-modal">
+  <div class="modal">
+    <h3>Set Status</h3>
+    <div class="overlay-options">
+      <button class="overlay-opt" data-text="LUNCH">LUNCH</button>
+      <button class="overlay-opt" data-text="NOT SCHEDULED">NOT SCHEDULED</button>
+      <button class="overlay-opt" data-text="MAINTENANCE">MAINTENANCE</button>
+      <button class="overlay-opt" data-text="SHIFT CHANGE">SHIFT CHANGE</button>
+      <button class="overlay-opt" data-text="MEETING">MEETING</button>
+    </div>
+    <div style="margin-top:12px;">
+      <input type="text" id="overlay-custom-text" placeholder="Or type custom text...">
+    </div>
+    <div class="modal-buttons">
+      <button id="overlay-clear">Clear Overlay</button>
+      <button id="overlay-cancel">Cancel</button>
+      <button id="overlay-apply" class="primary">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { renderFrame, hydrateShapes, loadImage } from '/static/render.js';
+
+// Preload common images
+const mreImg = loadImage('/static/elements/mre.png');
+
+// Render all preview canvases
+function renderPreviews() {
+  document.querySelectorAll('.screen-preview canvas').forEach(c => {
+    const ctx = c.getContext('2d');
+    try {
+      const layoutJSON = c.dataset.layout;
+      if (layoutJSON && layoutJSON !== 'null' && layoutJSON !== '[]') {
+        const data = JSON.parse(layoutJSON);
+        const shapes = hydrateShapes(data);
+        renderFrame(ctx, shapes);
+      }
+    } catch (e) {
+      console.error('Preview render error:', e);
+    }
+  });
+}
+
+// Render immediately for non-image shapes, then re-render once images load
+renderPreviews();
+mreImg.addEventListener('load', renderPreviews);
+
+// Add screen modal
+const addModal = document.getElementById('add-modal');
+const nameInput = document.getElementById('screen-name-input');
+
+if (document.getElementById('add-screen-btn')) {
+  document.getElementById('add-screen-btn').addEventListener('click', () => {
+    nameInput.value = '';
+    addModal.classList.add('open');
+    nameInput.focus();
+  });
+}
+
+document.getElementById('add-cancel').addEventListener('click', () => {
+  addModal.classList.remove('open');
+});
+
+addModal.addEventListener('click', e => {
+  if (e.target === addModal) addModal.classList.remove('open');
+});
+
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') createScreen();
+  if (e.key === 'Escape') addModal.classList.remove('open');
+});
+
+document.getElementById('add-create').addEventListener('click', createScreen);
+
+async function createScreen() {
+  const name = nameInput.value.trim();
+  if (!name) return;
+  const resp = await fetch('/api/screens', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (resp.ok) {
+    const sc = await resp.json();
+    window.location.href = '/designer?screen=' + sc.id;
+  }
+}
+
+// Delete screen
+document.querySelectorAll('.delete-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    if (!confirm('Delete this screen?')) return;
+    const resp = await fetch('/api/screens/' + id, { method: 'DELETE' });
+    if (resp.ok) window.location.reload();
+  });
+});
+
+// Per-screen active toggles
+document.querySelectorAll('.screen-active-bar').forEach(bar => {
+  bar.addEventListener('click', async () => {
+    const id = bar.dataset.id;
+    const isActive = bar.classList.contains('on');
+    const newActive = !isActive;
+    const card = bar.closest('.screen-card');
+    const name = card.querySelector('h3').textContent;
+    const msg = newActive
+      ? 'Starting "' + name + '" will clear its counts and begin a new production period. Are you sure?'
+      : 'Stopping "' + name + '" will finalize its production counts. Are you sure?';
+    if (!confirm(msg)) return;
+    const resp = await fetch('/api/screens/' + id + '/active', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: newActive }),
+    });
+    if (resp.ok) {
+      bar.classList.toggle('on', newActive);
+      bar.querySelector('.active-label').textContent = newActive ? 'Active' : 'Off';
+    }
+  });
+});
+
+// Per-screen auto-start toggles
+document.querySelectorAll('.auto-start-toggle').forEach(toggle => {
+  toggle.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const id = toggle.dataset.id;
+    const isOn = toggle.classList.contains('on');
+    const newVal = !isOn;
+    const resp = await fetch('/api/screens/' + id + '/auto-start', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auto_start: newVal }),
+    });
+    if (resp.ok) {
+      toggle.classList.toggle('on', newVal);
+    }
+  });
+});
+
+// Per-screen overlay toggles (Break, Changeover)
+document.querySelectorAll('.overlay-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const text = btn.dataset.text;
+    const resp = await fetch('/api/screens/' + id + '/overlay', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      // Clear all overlay buttons for this screen, then set the active one
+      const card = btn.closest('.screen-card');
+      card.querySelectorAll('.overlay-btn').forEach(b => b.classList.remove('active'));
+      if (data.active) btn.classList.add('active');
+    }
+  });
+});
+
+// Global controls
+const muteToggle = document.getElementById('mute-toggle');
+const overlayBtn = document.getElementById('overlay-btn');
+const overlayModal = document.getElementById('overlay-modal');
+const overlayCustom = document.getElementById('overlay-custom-text');
+let globalState = {
+  overlay_active: {{if .Global.OverlayActive}}true{{else}}false{{end}},
+  overlay_text: '{{.Global.OverlayText}}',
+  mute_active: {{if .Global.MuteActive}}true{{else}}false{{end}},
+  andon_active: {{if .Global.AndonActive}}true{{else}}false{{end}},
+};
+
+async function pushGlobal() {
+  await fetch('/api/global', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(globalState),
+  });
+}
+
+// Mute
+muteToggle.addEventListener('click', () => {
+  globalState.mute_active = !globalState.mute_active;
+  muteToggle.classList.toggle('active', globalState.mute_active);
+  muteToggle.textContent = globalState.mute_active ? 'UNDO BLACKOUT' : 'Blackout';
+  pushGlobal();
+});
+
+// Andon toggle
+const andonToggle = document.getElementById('andon-toggle');
+const andonLabel = andonToggle.querySelector('.andon-label');
+andonToggle.addEventListener('click', () => {
+  const turning_on = !globalState.andon_active;
+  const msg = turning_on
+    ? 'This will start all screens and begin tracking production. Continue?'
+    : 'This will stop all screens and finalize production counts. Continue?';
+  if (!confirm(msg)) return;
+  globalState.andon_active = turning_on;
+  andonToggle.classList.toggle('on', turning_on);
+  andonLabel.textContent = turning_on ? 'Active' : 'Off';
+  pushGlobal();
+  // Set all per-screen toggles to match
+  document.querySelectorAll('.screen-active-bar').forEach(bar => {
+    bar.classList.toggle('on', turning_on);
+    bar.querySelector('.active-label').textContent = turning_on ? 'Active' : 'Off';
+    fetch('/api/screens/' + bar.dataset.id + '/active', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: turning_on }),
+    });
+  });
+});
+
+// Overlay modal
+overlayBtn.addEventListener('click', () => {
+  overlayCustom.value = globalState.overlay_text || '';
+  document.querySelectorAll('.overlay-opt').forEach(o => o.classList.remove('selected'));
+  const match = document.querySelector('.overlay-opt[data-text="' + globalState.overlay_text + '"]');
+  if (match) match.classList.add('selected');
+  overlayModal.classList.add('open');
+});
+
+document.querySelectorAll('.overlay-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.overlay-opt').forEach(o => o.classList.remove('selected'));
+    btn.classList.add('selected');
+    overlayCustom.value = btn.dataset.text;
+  });
+});
+
+overlayCustom.addEventListener('input', () => {
+  document.querySelectorAll('.overlay-opt').forEach(o => o.classList.remove('selected'));
+});
+
+document.getElementById('overlay-apply').addEventListener('click', () => {
+  const text = overlayCustom.value.trim();
+  if (!text) return;
+  globalState.overlay_active = true;
+  globalState.overlay_text = text;
+  overlayBtn.classList.add('active');
+  overlayBtn.textContent = 'Status: ' + text;
+  overlayModal.classList.remove('open');
+  pushGlobal();
+});
+
+document.getElementById('overlay-clear').addEventListener('click', () => {
+  globalState.overlay_active = false;
+  globalState.overlay_text = '';
+  overlayBtn.classList.remove('active');
+  overlayBtn.textContent = 'Set Status';
+  overlayModal.classList.remove('open');
+  pushGlobal();
+});
+
+document.getElementById('overlay-cancel').addEventListener('click', () => {
+  overlayModal.classList.remove('open');
+});
+
+overlayModal.addEventListener('click', e => {
+  if (e.target === overlayModal) overlayModal.classList.remove('open');
+});
+
+// Dashboard SSE — live sync for screen active state and global state
+const dashES = new EventSource('/events/_dashboard');
+dashES.addEventListener('screen_active_change', e => {
+  try {
+    const d = JSON.parse(e.data);
+    const bar = document.querySelector('.screen-active-bar[data-id="' + d.screen_id + '"]');
+    if (bar) {
+      bar.classList.toggle('on', d.active);
+      bar.querySelector('.active-label').textContent = d.active ? 'Active' : 'Off';
+    }
+  } catch (err) {
+    console.error('SSE screen_active_change error:', err);
+  }
+});
+dashES.addEventListener('state', e => {
+  try {
+    const d = JSON.parse(e.data);
+    // Update andon toggle
+    andonToggle.classList.toggle('on', d.andon_active);
+    andonLabel.textContent = d.andon_active ? 'Active' : 'Off';
+    globalState.andon_active = d.andon_active;
+    // Update mute toggle
+    globalState.mute_active = d.mute_active;
+    muteToggle.classList.toggle('active', d.mute_active);
+    muteToggle.textContent = d.mute_active ? 'UNDO BLACKOUT' : 'Blackout';
+    // Update overlay
+    globalState.overlay_active = d.overlay_active;
+    globalState.overlay_text = d.overlay_text || '';
+    overlayBtn.classList.toggle('active', d.overlay_active);
+    overlayBtn.textContent = d.overlay_active ? 'Status: ' + d.overlay_text : 'Set Status';
+  } catch (err) {
+    console.error('SSE state error:', err);
+  }
+});
+window.addEventListener('beforeunload', () => { dashES.close(); });
+
+// Event log size warning toast
+const elToast = document.getElementById('eventlog-toast');
+const elToastMsg = elToast.querySelector('.toast-detail');
+elToast.querySelector('.toast-dismiss').addEventListener('click', () => {
+  elToast.classList.remove('visible');
+});
+async function checkEventLogSize() {
+  try {
+    const resp = await fetch('/api/eventlog/status');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.warning) {
+      elToastMsg.textContent = 'Event log is ' + data.size_mb + ' MB (' +
+        (data.process_rows + data.press_rows).toLocaleString() + ' rows). Consider pruning old data.';
+      elToast.classList.add('visible');
+    }
+  } catch {}
+}
+checkEventLogSize();
+setInterval(checkEventLogSize, 5 * 60 * 1000);
+</script>
+
+<div class="eventlog-toast" id="eventlog-toast">
+  <div class="toast-msg">
+    <strong>Event Log Warning</strong>
+    <span class="toast-detail"></span>
+  </div>
+  <button class="toast-dismiss">&times;</button>
+</div>
+</body>
+</html>
